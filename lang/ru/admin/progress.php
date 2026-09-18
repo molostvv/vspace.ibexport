@@ -15,3 +15,6 @@ $MESS['IBEXPORT_STATUS_DONE'] = 'Завершено';
 $MESS['IBEXPORT_STATUS_ERROR'] = 'Ошибка';
 $MESS['IBEXPORT_ERR_JOB_NOT_FOUND'] = 'Задание экспорта не найдено или недоступно.';
 $MESS['IBEXPORT_ERR_SESSID'] = 'Истекла сессия. Обновите страницу и повторите попытку.';
+$MESS['IBYADISK_BTN_UPLOAD'] = 'Выгрузить в Яндекс.Диск';
+$MESS['IBYADISK_UPLOAD_OK'] = 'Архив выгружен в Яндекс.Диск.';
+$MESS['IBYADISK_UPLOAD_ERROR'] = 'Не удалось выгрузить архив в Яндекс.Диск: #MESSAGE#';

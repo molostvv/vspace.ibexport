@@ -21,6 +21,40 @@ if (
 
 IncludeModuleLangFile(__FILE__);
 
+$items = [
+    [
+        'text' => GetMessage('IBEXPORT_MENU_EXPORT'),
+        'url' => 'vspace_ibexport_export.php?lang=' . LANGUAGE_ID,
+        'more_url' => ['vspace_ibexport_export.php', 'vspace_ibexport_progress.php'],
+    ],
+    [
+        'text' => GetMessage('IBEXPORT_MENU_LOG'),
+        'url' => 'vspace_ibexport_log.php?lang=' . LANGUAGE_ID,
+        'more_url' => ['vspace_ibexport_log.php'],
+    ],
+    [
+        'text' => GetMessage('IBEXPORT_MENU_IMPORT'),
+        'url' => 'vspace_ibexport_import.php?lang=' . LANGUAGE_ID,
+        'more_url' => ['vspace_ibexport_import.php', 'vspace_ibexport_import_progress.php'],
+    ],
+    [
+        'text' => GetMessage('IBEXPORT_MENU_IMPORT_LOG'),
+        'url' => 'vspace_ibexport_import_log.php?lang=' . LANGUAGE_ID,
+        'more_url' => ['vspace_ibexport_import_log.php'],
+    ],
+];
+
+// Пункт "Яндекс.Диск" управляет общим секретом (токен) для канала
+// перекачки файлов между инсталляциями — виден только администратору,
+// как и сама страница (см. admin/yandex_disk.php).
+if ($USER->IsAdmin()) {
+    $items[] = [
+        'text' => GetMessage('IBEXPORT_MENU_YANDEX_DISK'),
+        'url' => 'vspace_ibexport_yandex_disk.php?lang=' . LANGUAGE_ID,
+        'more_url' => ['vspace_ibexport_yandex_disk.php'],
+    ];
+}
+
 return [
     [
         'parent_menu' => 'global_menu_content',
@@ -36,28 +70,8 @@ return [
             'vspace_ibexport_import.php',
             'vspace_ibexport_import_progress.php',
             'vspace_ibexport_import_log.php',
+            'vspace_ibexport_yandex_disk.php',
         ],
-        'items' => [
-            [
-                'text' => GetMessage('IBEXPORT_MENU_EXPORT'),
-                'url' => 'vspace_ibexport_export.php?lang=' . LANGUAGE_ID,
-                'more_url' => ['vspace_ibexport_export.php', 'vspace_ibexport_progress.php'],
-            ],
-            [
-                'text' => GetMessage('IBEXPORT_MENU_LOG'),
-                'url' => 'vspace_ibexport_log.php?lang=' . LANGUAGE_ID,
-                'more_url' => ['vspace_ibexport_log.php'],
-            ],
-            [
-                'text' => GetMessage('IBEXPORT_MENU_IMPORT'),
-                'url' => 'vspace_ibexport_import.php?lang=' . LANGUAGE_ID,
-                'more_url' => ['vspace_ibexport_import.php', 'vspace_ibexport_import_progress.php'],
-            ],
-            [
-                'text' => GetMessage('IBEXPORT_MENU_IMPORT_LOG'),
-                'url' => 'vspace_ibexport_import_log.php?lang=' . LANGUAGE_ID,
-                'more_url' => ['vspace_ibexport_import_log.php'],
-            ],
-        ],
+        'items' => $items,
     ],
 ];

@@ -2,3 +2,6 @@
 Thumbs.db
 .idea/
 .vscode/
+/vendor/
+.phpunit.result.cache
+.phpunit.cache/

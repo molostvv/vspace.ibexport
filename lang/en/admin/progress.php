@@ -15,3 +15,6 @@ $MESS['IBEXPORT_STATUS_DONE'] = 'Done';
 $MESS['IBEXPORT_STATUS_ERROR'] = 'Error';
 $MESS['IBEXPORT_ERR_JOB_NOT_FOUND'] = 'Export job not found or not accessible.';
 $MESS['IBEXPORT_ERR_SESSID'] = 'Session expired. Reload the page and try again.';
+$MESS['IBYADISK_BTN_UPLOAD'] = 'Upload to Yandex.Disk';
+$MESS['IBYADISK_UPLOAD_OK'] = 'Archive uploaded to Yandex.Disk.';
+$MESS['IBYADISK_UPLOAD_ERROR'] = 'Failed to upload the archive to Yandex.Disk: #MESSAGE#';

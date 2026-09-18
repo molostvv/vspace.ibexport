@@ -153,10 +153,10 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php $tabControl->Buttons(); ?>
     <?php if ($estimate !== null): ?>
         <input type="hidden" name="STEP" value="run">
-        <input type="submit" class="adm-btn-save" value="<?= GetMessage('IBEXPORT_BTN_RUN') ?>">
+        <input type="submit" class="adm-btn adm-btn-save" value="<?= GetMessage('IBEXPORT_BTN_RUN') ?>">
     <?php else: ?>
         <input type="hidden" name="STEP" value="estimate">
-        <input type="submit" value="<?= GetMessage('IBEXPORT_BTN_ESTIMATE') ?>">
+        <input type="submit" class="adm-btn adm-btn-save" value="<?= GetMessage('IBEXPORT_BTN_ESTIMATE') ?>">
     <?php endif; ?>
     <?php $tabControl->End(); ?>
 </form>

@@ -86,6 +86,8 @@ class vspace_ibexport extends CModule
             'vspace_ibexport_import.php',
             'vspace_ibexport_import_progress.php',
             'vspace_ibexport_import_log.php',
+            'vspace_ibexport_yandex_disk.php',
+            'vspace_ibexport_yandex_disk_upload.php',
         ];
         foreach ($files as $file) {
             $path = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/' . $file;
@@ -171,6 +173,10 @@ class vspace_ibexport extends CModule
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',
             'Vspace\\Ibexport\\Integration\\AdminListIntegration' => 'lib/Integration/AdminListIntegration.php',
+            'Vspace\\Ibexport\\YandexDiskClient' => 'lib/YandexDiskClient.php',
+            'Vspace\\Ibexport\\YandexDiskException' => 'lib/YandexDiskException.php',
+            'Vspace\\Ibexport\\Http\\YandexDiskTransportInterface' => 'lib/Http/YandexDiskTransportInterface.php',
+            'Vspace\\Ibexport\\Http\\BitrixHttpTransport' => 'lib/Http/BitrixHttpTransport.php',
         ]);
 
         $this->InstallFiles();

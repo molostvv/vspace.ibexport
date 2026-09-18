@@ -5,6 +5,7 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_b
 use Bitrix\Main\Loader;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\JobTable;
+use Vspace\Ibexport\Options;
 
 Loader::includeModule('vspace.ibexport');
 
@@ -78,6 +79,19 @@ if ($job['STATUS'] === JobTable::STATUS_DONE) {
         . '<div class="adm-info-message-icon"></div>'
         . '</div></div>';
     $downloadButtonHtml = '<a class="adm-btn adm-btn-save" href="' . htmlspecialcharsbx($downloadUrl) . '">' . htmlspecialcharsbx(GetMessage('IBEXPORT_BTN_DOWNLOAD')) . '</a>';
+
+    // Выгрузка в Яндекс.Диск — отдельная, полностью ручная кнопка рядом со
+    // "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск", раздел 3): недоступность
+    // Диска не должна ронять/блокировать обычное скачивание, поэтому это
+    // отдельная форма с собственным action, а не часть текущей страницы.
+    if (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()) {
+        $downloadButtonHtml .= ' <form method="post" action="/bitrix/admin/vspace_ibexport_yandex_disk_upload.php" style="display:inline;">'
+            . bitrix_sessid_post()
+            . '<input type="hidden" name="lang" value="' . LANGUAGE_ID . '">'
+            . '<input type="hidden" name="JOB_ID" value="' . (int)$jobId . '">'
+            . '<input type="submit" class="adm-btn" value="' . htmlspecialcharsbx(GetMessage('IBYADISK_BTN_UPLOAD')) . '">'
+            . '</form>';
+    }
 } elseif ($job['STATUS'] === JobTable::STATUS_ERROR) {
     $messageHtml = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
         . '<div class="adm-info-message-title">' . htmlspecialcharsbx(GetMessage('IBEXPORT_PROGRESS_ERROR')) . ': ' . htmlspecialcharsbx((string)$job['ERROR_MESSAGE']) . '</div>'
@@ -91,12 +105,19 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
     window.vspaceIbexportProgress = {
         jobId: <?= (int)$jobId ?>,
         sessid: '<?= bitrix_sessid() ?>',
+        lang: '<?= LANGUAGE_ID ?>',
         pollUrl: '/bitrix/admin/vspace_ibexport_progress.php?lang=<?= LANGUAGE_ID ?>',
+        // Нужно JS, чтобы дорисовать кнопку "Выгрузить в Яндекс.Диск" и
+        // при завершении экспорта через AJAX-опрос (без перезагрузки
+        // страницы) — см. progress.js, иначе кнопка появится только после
+        // ручного обновления страницы уже завершённого задания.
+        yandexDiskEnabled: <?= (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()) ? 'true' : 'false' ?>,
         messages: {
             running: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_RUNNING')) ?>,
             done: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_DONE')) ?>,
             error: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_ERROR')) ?>,
             download: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_BTN_DOWNLOAD')) ?>,
+            yandexUpload: <?= \CUtil::PhpToJSObject(GetMessage('IBYADISK_BTN_UPLOAD')) ?>,
             statusLabels: <?= \CUtil::PhpToJSObject($statusLabels) ?>
         }
     };
@@ -151,6 +172,24 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
     <?php $tabControl->End(); ?>
 </div>
 <div id="vibx-result"><?= $messageHtml ?></div>
+
+<?php
+// Результат отдельного действия "Выгрузить в Яндекс.Диск"
+// (yandex_disk_upload.php перенаправляет сюда с этим флагом) — свой,
+// независимый от основного messageHtml блок, чтобы не путать со статусом
+// самого экспорта.
+$diskUploadStatus = (string)($_REQUEST['DISK_UPLOAD'] ?? '');
+if ($diskUploadStatus === 'ok'): ?>
+    <div class="adm-info-message-wrap adm-info-message-green"><div class="adm-info-message">
+        <div class="adm-info-message-title"><?= htmlspecialcharsbx(GetMessage('IBYADISK_UPLOAD_OK')) ?></div>
+        <div class="adm-info-message-icon"></div>
+    </div></div>
+<?php elseif ($diskUploadStatus === 'error'): ?>
+    <div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">
+        <div class="adm-info-message-title"><?= htmlspecialcharsbx(GetMessage('IBYADISK_UPLOAD_ERROR', ['#MESSAGE#' => (string)($_REQUEST['DISK_ERROR'] ?? '')])) ?></div>
+        <div class="adm-info-message-icon"></div>
+    </div></div>
+<?php endif; ?>
 
 <?php
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';

@@ -92,7 +92,19 @@
                     + '</div></div>';
             }
             if (downloadEl && data.download_url) {
-                downloadEl.innerHTML = '<a class="adm-btn adm-btn-save" href="' + data.download_url + '">' + cfg.messages.download + '</a>';
+                var downloadHtml = '<a class="adm-btn adm-btn-save" href="' + data.download_url + '">' + cfg.messages.download + '</a>';
+                if (cfg.yandexDiskEnabled) {
+                    // Та же форма, что и в серверной разметке уже
+                    // завершённого задания (см. progress.php) — иначе
+                    // кнопка появится только после перезагрузки страницы.
+                    downloadHtml += ' <form method="post" action="/bitrix/admin/vspace_ibexport_yandex_disk_upload.php" style="display:inline;">'
+                        + '<input type="hidden" name="sessid" value="' + cfg.sessid + '">'
+                        + '<input type="hidden" name="lang" value="' + cfg.lang + '">'
+                        + '<input type="hidden" name="JOB_ID" value="' + cfg.jobId + '">'
+                        + '<input type="submit" class="adm-btn" value="' + cfg.messages.yandexUpload + '">'
+                        + '</form>';
+                }
+                downloadEl.innerHTML = downloadHtml;
             }
         } else if (data.status === 'ERROR') {
             if (resultEl) {

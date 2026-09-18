@@ -7,6 +7,7 @@ use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\Importer;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
+use Vspace\Ibexport\YandexDiskException;
 
 Loader::includeModule('vspace.ibexport');
 Loader::includeModule('iblock');
@@ -18,7 +19,8 @@ $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
 global $USER, $APPLICATION;
 
 $errors = [];
-$prepared = null; // результат Importer::prepareUpload() либо восстановленный из скрытых полей формы
+$prepared = null; // результат Importer::prepareUpload()/prepareFromDisk() либо восстановленный из скрытых полей формы
+$diskFiles = null; // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске
 
 $iblockId = (int)($_REQUEST['IBLOCK_ID'] ?? 0);
 $parentSectionRef = trim((string)($_REQUEST['PARENT_SECTION_REF'] ?? ''));
@@ -39,7 +41,7 @@ while ($ib = $ibRes->Fetch()) {
     }
 }
 
-if ($step === 'validate' || $step === 'run') {
+if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
     try {
         if ($iblockId <= 0) {
             throw new Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
@@ -50,6 +52,25 @@ if ($step === 'validate' || $step === 'run') {
 
         if ($step === 'validate') {
             $prepared = Importer::prepareUpload($_FILES['ARCHIVE'] ?? []);
+        } elseif ($step === 'disk_list') {
+            // Отдельный, полностью ручной шаг (ТЗ "Экспорт в Яндекс.Диск",
+            // раздел 3) — недоступность Диска здесь не мешает обычной
+            // ручной загрузке архива веткой STEP=validate выше.
+            try {
+                $diskFiles = Importer::listDiskFiles();
+            } catch (YandexDiskException $e) {
+                $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
+            }
+        } elseif ($step === 'disk_import') {
+            $diskPath = (string)($_REQUEST['DISK_PATH'] ?? '');
+            if ($diskPath === '') {
+                throw new Exception(GetMessage('IBYADISK_ERR_NO_PATH'));
+            }
+            try {
+                $prepared = Importer::prepareFromDisk($diskPath);
+            } catch (YandexDiskException $e) {
+                throw new Exception(GetMessage('IBYADISK_DOWNLOAD_ERROR', ['#MESSAGE#' => $e->getMessage()]));
+            }
         } else { // STEP=run — уже провалидированный на предыдущем шаге архив
             if (!check_bitrix_sessid()) {
                 throw new Exception(GetMessage('IBIMPORT_ERR_SESSID'));
@@ -166,13 +187,66 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php $tabControl->Buttons(); ?>
     <?php if ($prepared !== null): ?>
         <input type="hidden" name="STEP" value="run">
-        <input type="submit" class="adm-btn-save" value="<?= GetMessage('IBIMPORT_BTN_RUN') ?>">
+        <input type="submit" class="adm-btn adm-btn-save" value="<?= GetMessage('IBIMPORT_BTN_RUN') ?>">
     <?php else: ?>
-        <input type="hidden" name="STEP" value="validate">
-        <input type="submit" value="<?= GetMessage('IBIMPORT_BTN_VALIDATE') ?>">
+        <button type="submit" name="STEP" value="validate" class="adm-btn adm-btn-save"><?= GetMessage('IBIMPORT_BTN_VALIDATE') ?></button>
+        <?php if (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()): ?>
+            <?php
+            // Отдельная, независимая от загрузки файла кнопка (ТЗ "Экспорт
+            // в Яндекс.Диск", раздел 3) — формметод GET, чтобы не заходить
+            // в основную ветку STEP=validate; недоступность Диска в момент
+            // нажатия не мешает обычной загрузке .zip выше.
+            ?>
+            <button type="submit" name="STEP" value="disk_list" formmethod="get" class="adm-btn"><?= GetMessage('IBYADISK_BTN_CHECK') ?></button>
+        <?php endif; ?>
     <?php endif; ?>
     <?php $tabControl->End(); ?>
 </form>
+
+<?php if ($diskFiles !== null): ?>
+    <?php
+    // Список файлов на Диске — превью-список для выбора файла перед
+    // импортом, а не постоянная сущность с сортировкой/фильтрами/БД, для
+    // которой создан CAdminList/CAdminUiList — поэтому здесь обычная
+    // таблица, оформленная штатными классами адм-списка (adm-list-table*)
+    // для визуальной консистентности, а не полноценный список ядра.
+    ?>
+    <div class="vibx-note" style="display: block;">
+        <strong><?= GetMessage('IBYADISK_LIST_HEADING') ?></strong>
+        <?php if (!$diskFiles): ?>
+            <div style="margin-top: 8px;"><?= GetMessage('IBYADISK_LIST_EMPTY') ?></div>
+        <?php else: ?>
+            <table class="adm-list-table" style="margin-top: 8px; width: 100%;">
+                <thead>
+                <tr class="adm-list-table-header">
+                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_NAME') ?></td>
+                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_SIZE') ?></td>
+                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_MODIFIED') ?></td>
+                    <td class="adm-list-table-cell"></td>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($diskFiles as $file): ?>
+                    <tr class="adm-list-table-row">
+                        <td class="adm-list-table-cell"><?= htmlspecialcharsbx($file['name']) ?></td>
+                        <td class="adm-list-table-cell"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></td>
+                        <td class="adm-list-table-cell"><?= htmlspecialcharsbx($file['modified']) ?></td>
+                        <td class="adm-list-table-cell">
+                            <form method="get" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
+                                <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
+                                <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
+                                <input type="hidden" name="STEP" value="disk_import">
+                                <input type="hidden" name="DISK_PATH" value="<?= htmlspecialcharsbx($file['path']) ?>">
+                                <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 
 <?php
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
