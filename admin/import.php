@@ -138,6 +138,12 @@ $tabControl = new CAdminTabControl('tabControl', [
         font-weight: bold;
         color: #2b3446;
     }
+    /* Кнопка "Импортировать" делает свою ячейку выше, чем текстовые
+       ячейки той же строки — без явного vertical-align текст в них
+       остаётся прижат к верху, а не к середине выросшей строки. */
+    .vibx-disk-list-table .adm-list-table-cell {
+        vertical-align: middle;
+    }
 </style>
 
 <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_import_form" enctype="multipart/form-data">
@@ -232,7 +238,7 @@ $tabControl = new CAdminTabControl('tabControl', [
         <div class="vibx-note"><?= GetMessage('IBYADISK_LIST_EMPTY') ?></div>
     <?php else: ?>
         <div class="adm-list-table-wrap">
-            <table class="adm-list-table" style="width: 100%;">
+            <table class="adm-list-table vibx-disk-list-table" style="width: 100%;">
                 <thead>
                 <tr class="adm-list-table-header">
                     <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_NAME') ?></div></td>
