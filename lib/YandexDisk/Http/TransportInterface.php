@@ -1,16 +1,16 @@
 <?php
 
-namespace Vspace\Ibexport\Http;
+namespace Vspace\Ibexport\YandexDisk\Http;
 
 /**
- * Тонкая граница между YandexDiskClient и реальным HTTP-транспортом.
- * Нужна для того, чтобы логику клиента (сборка URL, разбор ответов API,
- * обработка ошибок, лимит размера файла) можно было покрыть юнит-тестами
- * с поддельным транспортом — без сетевых запросов и без поднятия ядра
+ * Тонкая граница между Client и реальным HTTP-транспортом. Нужна для
+ * того, чтобы логику клиента (сборка URL, разбор ответов API, обработка
+ * ошибок, лимит размера файла) можно было покрыть юнит-тестами с
+ * поддельным транспортом — без сетевых запросов и без поднятия ядра
  * Bitrix. Боевая реализация — BitrixHttpTransport поверх
  * \Bitrix\Main\Web\HttpClient.
  */
-interface YandexDiskTransportInterface
+interface TransportInterface
 {
     /**
      * @param array<string,string> $headers

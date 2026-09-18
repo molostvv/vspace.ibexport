@@ -1,9 +1,9 @@
 <?php
 
-namespace Vspace\Ibexport\Tests;
+namespace Vspace\Ibexport\Tests\YandexDisk\Http;
 
 use PHPUnit\Framework\TestCase;
-use Vspace\Ibexport\Http\BitrixHttpTransport;
+use Vspace\Ibexport\YandexDisk\Http\BitrixHttpTransport;
 
 /**
  * Юнит-тесты только для resolveRedirectUrl() — чистой функции достройки

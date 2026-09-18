@@ -4,8 +4,9 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_b
 
 use Bitrix\Main\Loader;
 use Vspace\Ibexport\Options;
-use Vspace\Ibexport\YandexDiskClient;
-use Vspace\Ibexport\YandexDiskException;
+use Vspace\Ibexport\YandexDisk\Client;
+use Vspace\Ibexport\YandexDisk\Exception;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
 
@@ -30,15 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
     $action = (string)($_REQUEST['ACTION'] ?? '');
     try {
         if ($action === 'disconnect') {
-            Options::clearYandexDiskToken();
+            Settings::clearToken();
             $notice = GetMessage('IBYADISK_DISCONNECTED');
         } else { // ACTION=save
             $folder = trim((string)($_REQUEST['FOLDER'] ?? ''));
-            Options::setYandexDiskFolder($folder !== '' ? $folder : '/vspace.ibexport');
+            Settings::setFolder($folder !== '' ? $folder : '/vspace.ibexport');
 
             $token = trim((string)($_REQUEST['TOKEN'] ?? ''));
             if ($token !== '') {
-                Options::setYandexDiskToken($token);
+                Settings::setToken($token);
             }
 
             Options::setYandexDiskEnabled(($_REQUEST['ENABLED'] ?? '') === 'Y');
@@ -61,9 +62,9 @@ if ($errors) {
 // (ТЗ, раздел 6: все операции синхронные, по явному действию администратора,
 // открытие страницы настроек — такое же явное действие).
 $statusHtml = '';
-if (Options::hasYandexDiskToken()) {
+if (Settings::hasToken()) {
     try {
-        $client = new YandexDiskClient(Options::getYandexDiskToken());
+        $client = new Client(Settings::getToken());
         $status = $client->checkConnection();
         $freeGb = round($status['free_space'] / 1073741824, 1);
         $totalGb = round($status['total_space'] / 1073741824, 1);
@@ -75,7 +76,7 @@ if (Options::hasYandexDiskToken()) {
             ])) . '</div>'
             . '<div class="adm-info-message-icon"></div>'
             . '</div></div>';
-    } catch (YandexDiskException $e) {
+    } catch (Exception $e) {
         $statusHtml = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
             . '<div class="adm-info-message-title">' . htmlspecialcharsbx(GetMessage('IBYADISK_STATUS_ERROR', ['#MESSAGE#' => $e->getMessage()])) . '</div>'
             . '<div class="adm-info-message-icon"></div>'
@@ -122,13 +123,13 @@ $tabControl = new CAdminTabControl('tabControl', [
         <td><?= GetMessage('IBYADISK_FIELD_TOKEN') ?></td>
         <td>
             <input type="password" size="50" name="TOKEN" value="" autocomplete="off"
-                   placeholder="<?= Options::hasYandexDiskToken() ? htmlspecialcharsbx(GetMessage('IBYADISK_TOKEN_SAVED_PLACEHOLDER')) : '' ?>">
+                   placeholder="<?= Settings::hasToken() ? htmlspecialcharsbx(GetMessage('IBYADISK_TOKEN_SAVED_PLACEHOLDER')) : '' ?>">
             <div style="color:#888;font-size:11px;"><?= GetMessage('IBYADISK_FIELD_TOKEN_HINT') ?></div>
         </td>
     </tr>
     <tr>
         <td><?= GetMessage('IBYADISK_FIELD_FOLDER') ?></td>
-        <td><input type="text" size="40" name="FOLDER" value="<?= htmlspecialcharsbx(Options::getYandexDiskFolder()) ?>"></td>
+        <td><input type="text" size="40" name="FOLDER" value="<?= htmlspecialcharsbx(Settings::getFolder()) ?>"></td>
     </tr>
 
     <?php $tabControl->Buttons(); ?>
@@ -136,7 +137,7 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php $tabControl->End(); ?>
 </form>
 
-<?php if (Options::hasYandexDiskToken()): ?>
+<?php if (Settings::hasToken()): ?>
     <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_yandex_disk_disconnect" style="margin-top: 10px;">
         <?= bitrix_sessid_post() ?>
         <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">

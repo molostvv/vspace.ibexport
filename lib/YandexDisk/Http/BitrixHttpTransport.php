@@ -1,17 +1,17 @@
 <?php
 
-namespace Vspace\Ibexport\Http;
+namespace Vspace\Ibexport\YandexDisk\Http;
 
 use Bitrix\Main\Web\HttpClient;
 
 /**
- * Реализация YandexDiskTransportInterface на штатном HTTP-клиенте ядра
+ * Реализация TransportInterface на штатном HTTP-клиенте ядра
  * (\Bitrix\Main\Web\HttpClient) — готового коннектора для Яндекс.Диска в
  * Bitrix нет (CCloudStorage поддерживает только S3-совместимые/Google/
  * Azure/OpenStack), поэтому сам протокол — не штатный механизм, но
  * транспорт для него — штатный.
  */
-class BitrixHttpTransport implements YandexDiskTransportInterface
+class BitrixHttpTransport implements TransportInterface
 {
     private const MAX_REDIRECTS = 5;
 

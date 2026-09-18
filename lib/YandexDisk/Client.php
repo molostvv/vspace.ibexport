@@ -1,9 +1,9 @@
 <?php
 
-namespace Vspace\Ibexport;
+namespace Vspace\Ibexport\YandexDisk;
 
-use Vspace\Ibexport\Http\BitrixHttpTransport;
-use Vspace\Ibexport\Http\YandexDiskTransportInterface;
+use Vspace\Ibexport\YandexDisk\Http\BitrixHttpTransport;
+use Vspace\Ibexport\YandexDisk\Http\TransportInterface;
 
 /**
  * Обёртка над REST API Яндекс.Диска (cloud-api.yandex.net) — канал переноса
@@ -11,12 +11,12 @@ use Vspace\Ibexport\Http\YandexDiskTransportInterface;
  * docs/yandex-disk.md. Все операции синхронные, по явному нажатию кнопки
  * администратором — без очередей/фоновых воркеров (ТЗ, раздел 6).
  *
- * Вся сетевая логика идёт через YandexDiskTransportInterface — это
- * единственный способ покрыть её юнит-тестами (сборка URL, разбор ответов
- * API, коды ошибок, лимит размера файла) без реальных запросов к Яндексу и
- * без поднятия ядра Bitrix, см. tests/YandexDiskClientTest.php.
+ * Вся сетевая логика идёт через Http\TransportInterface — это единственный
+ * способ покрыть её юнит-тестами (сборка URL, разбор ответов API, коды
+ * ошибок, лимит размера файла) без реальных запросов к Яндексу и без
+ * поднятия ядра Bitrix, см. tests/YandexDisk/ClientTest.php.
  */
-class YandexDiskClient
+class Client
 {
     private const API_BASE = 'https://cloud-api.yandex.net/v1/disk';
 
@@ -24,12 +24,12 @@ class YandexDiskClient
     public const MAX_FILE_SIZE = 1073741824; // 1 ГБ
 
     private string $token;
-    private YandexDiskTransportInterface $transport;
+    private TransportInterface $transport;
 
-    public function __construct(string $token, ?YandexDiskTransportInterface $transport = null, int $timeout = 15)
+    public function __construct(string $token, ?TransportInterface $transport = null, int $timeout = 15)
     {
         if ($token === '') {
-            throw new YandexDiskException('Не задан токен Яндекс.Диска.');
+            throw new Exception('Не задан токен Яндекс.Диска.');
         }
         $this->token = $token;
         $this->transport = $transport ?? new BitrixHttpTransport($timeout);
@@ -56,7 +56,7 @@ class YandexDiskClient
     {
         $data = json_decode($body, true);
         if (!is_array($data)) {
-            throw new YandexDiskException('Некорректный (не JSON) ответ Яндекс.Диска.');
+            throw new Exception('Некорректный (не JSON) ответ Яндекс.Диска.');
         }
         return $data;
     }
@@ -64,7 +64,7 @@ class YandexDiskClient
     private function throwOnTransportFailure(array $res): void
     {
         if ($res['status'] === 0) {
-            throw new YandexDiskException('Яндекс.Диск недоступен: ' . $res['body']);
+            throw new Exception('Яндекс.Диск недоступен: ' . $res['body']);
         }
     }
 
@@ -92,7 +92,7 @@ class YandexDiskClient
             $message = (string)($decoded['message'] ?? $message);
             $description = (string)($decoded['description'] ?? '');
         }
-        throw new YandexDiskException(trim($message . ($description !== '' ? ': ' . $description : '')), $status);
+        throw new Exception(trim($message . ($description !== '' ? ': ' . $description : '')), $status);
     }
 
     /** GET /v1/disk — валидность токена, логин владельца, свободное место. */
@@ -130,12 +130,12 @@ class YandexDiskClient
     public function uploadFile(string $diskPath, string $localFilePath, bool $overwrite = false): void
     {
         if (!is_file($localFilePath)) {
-            throw new YandexDiskException('Локальный файл для выгрузки не найден: ' . $localFilePath);
+            throw new Exception('Локальный файл для выгрузки не найден: ' . $localFilePath);
         }
 
         $size = filesize($localFilePath);
         if ($size === false || $size > self::MAX_FILE_SIZE) {
-            throw new YandexDiskException('Файл превышает лимит 1 ГБ для бесплатного тарифа Яндекс.Диска.');
+            throw new Exception('Файл превышает лимит 1 ГБ для бесплатного тарифа Яндекс.Диска.');
         }
 
         $res = $this->transport->request('GET', $this->buildUrl('/resources/upload', [
@@ -149,19 +149,19 @@ class YandexDiskClient
 
         $href = (string)($this->decodeJson($res['body'])['href'] ?? '');
         if ($href === '') {
-            throw new YandexDiskException('Яндекс.Диск не вернул ссылку для загрузки.');
+            throw new Exception('Яндекс.Диск не вернул ссылку для загрузки.');
         }
 
         $content = file_get_contents($localFilePath);
         if ($content === false) {
-            throw new YandexDiskException('Не удалось прочитать файл для выгрузки: ' . $localFilePath);
+            throw new Exception('Не удалось прочитать файл для выгрузки: ' . $localFilePath);
         }
 
         // href уже содержит собственный временный токен доступа — заголовок
         // авторизации Диска здесь не нужен (и не требуется API).
         $uploadRes = $this->transport->request('PUT', $href, [], $content);
         if ($uploadRes['status'] === 0) {
-            throw new YandexDiskException('Не удалось обратиться по ссылке для загрузки (' . $this->hrefPreview($href) . '): ' . $uploadRes['body']);
+            throw new Exception('Не удалось обратиться по ссылке для загрузки (' . $this->hrefPreview($href) . '): ' . $uploadRes['body']);
         }
         if (!in_array($uploadRes['status'], [201, 202], true)) {
             $this->throwApiError($uploadRes['status'], $uploadRes['body']);
@@ -217,16 +217,16 @@ class YandexDiskClient
 
         $href = (string)($this->decodeJson($res['body'])['href'] ?? '');
         if ($href === '') {
-            throw new YandexDiskException('Яндекс.Диск не вернул ссылку для скачивания.');
+            throw new Exception('Яндекс.Диск не вернул ссылку для скачивания.');
         }
 
         $status = $this->transport->downloadToFile($href, [], $localFilePath);
         if ($status === 0) {
-            throw new YandexDiskException('Не удалось скачать файл по ссылке от Яндекс.Диска (' . $this->hrefPreview($href) . ').');
+            throw new Exception('Не удалось скачать файл по ссылке от Яндекс.Диска (' . $this->hrefPreview($href) . ').');
         }
         if ($status < 200 || $status >= 300) {
             @unlink($localFilePath);
-            throw new YandexDiskException('Ошибка при скачивании файла с Яндекс.Диска (HTTP ' . $status . ').');
+            throw new Exception('Ошибка при скачивании файла с Яндекс.Диска (HTTP ' . $status . ').');
         }
     }
 }

@@ -42,26 +42,40 @@
 
 ## Компоненты
 
-- `lib/YandexDiskClient.php` — обёртка над REST API
+Весь код, специфичный для Яндекс.Диска, живёт в одном namespace
+`Vspace\Ibexport\YandexDisk` (каталог `lib/YandexDisk/`):
+
+- `lib/YandexDisk/Client.php` — обёртка над REST API
   `cloud-api.yandex.net/v1/disk`: `checkConnection()`, `ensureFolder()`,
   `uploadFile()`, `listFiles()`, `downloadFile()`.
-- `lib/Http/YandexDiskTransportInterface.php` +
-  `lib/Http/BitrixHttpTransport.php` — вся сетевая логика клиента идёт
-  через этот интерфейс. Это сделано ради юнит-тестируемости (см.
-  `tests/YandexDiskClientTest.php`): с поддельным транспортом можно
+- `lib/YandexDisk/Exception.php` — ошибка обращения к Диску (сеть,
+  авторизация, код ошибки API).
+- `lib/YandexDisk/Http/TransportInterface.php` +
+  `lib/YandexDisk/Http/BitrixHttpTransport.php` — вся сетевая логика
+  клиента идёт через этот интерфейс. Это сделано ради юнит-тестируемости
+  (см. `tests/YandexDisk/ClientTest.php`): с поддельным транспортом можно
   проверить сборку URL, разбор ответов API и обработку ошибок без реальных
   запросов к Яндексу и без поднятия ядра Bitrix. Боевая реализация —
   тонкая обёртка над штатным `\Bitrix\Main\Web\HttpClient`.
-- `lib/Options.php` — `isYandexDiskEnabled()`, `getYandexDiskToken()`/
-  `setYandexDiskToken()` (шифрование), `getYandexDiskFolder()`,
-  `hasYandexDiskToken()`, `clearYandexDiskToken()`.
+- `lib/YandexDisk/Settings.php` — токен и папка обмена: `getToken()`/
+  `setToken()` (шифрование), `getFolder()`/`setFolder()`, `hasToken()`,
+  `clearToken()`. Флаг «включена ли интеграция»
+  (`isYandexDiskEnabled()`/`setYandexDiskEnabled()`) остаётся в общем
+  `lib/Options.php` — это просто переключатель наравне с другими опциями
+  модуля, а не специфика самого Диска.
+- `lib/YandexDisk/ImportSource.php` — источник импорта «с Диска»:
+  `listDiskFiles()`, `prepareFromDisk()`. Используются из
+  `admin/import.php` (`STEP=disk_list`/`disk_import`), делят общую логику
+  распаковки/валидации ZIP с обычной загрузкой файла
+  (`Importer::extractAndValidate()` — публичный метод именно ради этого).
 - `admin/yandex_disk.php` — страница настройки/статуса подключения.
 - `admin/yandex_disk_upload.php` — действие «Выгрузить в Яндекс.Диск»
   (POST, вызывается с `admin/progress.php`).
-- `Importer::listDiskFiles()` / `Importer::prepareFromDisk()` — используются
-  из `admin/import.php` (`STEP=disk_list`/`disk_import`), делят общую логику
-  распаковки/валидации ZIP с обычной загрузкой файла
-  (`Importer::extractAndValidate()`).
+
+Точки входа админки (`admin/yandex_disk.php`, `admin/yandex_disk_upload.php`
+и их обёртки в `install/admin/`) физически остаются в общей структуре
+`admin/`/`install/admin/` — только их `use`-импорты указывают на новый
+namespace.
 
 ## Почему не штатный механизм Bitrix
 

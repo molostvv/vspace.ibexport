@@ -73,18 +73,22 @@
   списки элементов/разделов через `main::OnAdminListDisplay`.
 - `lib/Rights.php` — проверка прав на экспорт/импорт по конкретному
   инфоблоку.
-- `lib/YandexDiskClient.php` + `lib/Http/*` — клиент REST API Яндекс.Диска
-  поверх штатного `HttpClient`, см. [docs/yandex-disk.md](docs/yandex-disk.md).
+- `lib/YandexDisk/` — вся интеграция с Яндекс.Диском в одном namespace
+  (`Vspace\Ibexport\YandexDisk`): `Client.php` (REST API поверх штатного
+  `HttpClient`), `Settings.php` (токен/папка обмена), `ImportSource.php`
+  (источник импорта "с Диска"), `Http/` (транспорт клиента), см.
+  [docs/yandex-disk.md](docs/yandex-disk.md).
 - `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`).
 
 ## Тесты
 
-Юнит-тесты (PHPUnit, 23 теста) покрывают чистую логику `YandexDiskClient`
-(сборка URL, разбор ответов API, обработка ошибок, лимит размера файла) с
-поддельным HTTP-транспортом, а также разбор HTTP-редиректов в
-`BitrixHttpTransport::resolveRedirectUrl()` (в т.ч. protocol-relative
-`Location`, из-за которого аплоадер Яндекс.Диска ломал загрузку до
-исправления) — без сети и без поднятия ядра Bitrix:
+Юнит-тесты (PHPUnit, 23 теста) покрывают чистую логику
+`YandexDisk\Client` (сборка URL, разбор ответов API, обработка ошибок,
+лимит размера файла) с поддельным HTTP-транспортом, а также разбор
+HTTP-редиректов в `YandexDisk\Http\BitrixHttpTransport::resolveRedirectUrl()`
+(в т.ч. protocol-relative `Location`, из-за которого аплоадер
+Яндекс.Диска ломал загрузку до исправления) — без сети и без поднятия
+ядра Bitrix:
 
 ```bash
 composer install

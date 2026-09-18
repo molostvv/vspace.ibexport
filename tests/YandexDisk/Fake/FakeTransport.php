@@ -1,15 +1,15 @@
 <?php
 
-namespace Vspace\Ibexport\Tests\Fake;
+namespace Vspace\Ibexport\Tests\YandexDisk\Fake;
 
-use Vspace\Ibexport\Http\YandexDiskTransportInterface;
+use Vspace\Ibexport\YandexDisk\Http\TransportInterface;
 
 /**
- * Транспорт-подделка для тестов YandexDiskClient: ответы задаются заранее
- * (очередью), все вызовы записываются для последующих ассертов — реальных
- * HTTP-запросов и ядра Bitrix не требуется.
+ * Транспорт-подделка для тестов Client: ответы задаются заранее (очередью),
+ * все вызовы записываются для последующих ассертов — реальных HTTP-запросов
+ * и ядра Bitrix не требуется.
  */
-class FakeYandexDiskTransport implements YandexDiskTransportInterface
+class FakeTransport implements TransportInterface
 {
     /** @var array<int, array{status:int, body:string}> */
     private array $responses = [];
@@ -39,7 +39,7 @@ class FakeYandexDiskTransport implements YandexDiskTransportInterface
     {
         $this->calls[] = ['method' => $method, 'url' => $url, 'headers' => $headers, 'body' => $body];
         if (!$this->responses) {
-            throw new \RuntimeException('FakeYandexDiskTransport: no queued response for ' . $method . ' ' . $url);
+            throw new \RuntimeException('FakeTransport: no queued response for ' . $method . ' ' . $url);
         }
         return array_shift($this->responses);
     }
@@ -48,7 +48,7 @@ class FakeYandexDiskTransport implements YandexDiskTransportInterface
     {
         $this->downloadCalls[] = ['url' => $url, 'headers' => $headers, 'destPath' => $destPath];
         if (!$this->downloadStatuses) {
-            throw new \RuntimeException('FakeYandexDiskTransport: no queued download status for ' . $url);
+            throw new \RuntimeException('FakeTransport: no queued download status for ' . $url);
         }
         $status = array_shift($this->downloadStatuses);
         if ($status >= 200 && $status < 300) {

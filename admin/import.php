@@ -7,7 +7,9 @@ use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\Importer;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
-use Vspace\Ibexport\YandexDiskException;
+use Vspace\Ibexport\YandexDisk\Exception;
+use Vspace\Ibexport\YandexDisk\ImportSource;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
 Loader::includeModule('iblock');
@@ -19,7 +21,7 @@ $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
 global $USER, $APPLICATION;
 
 $errors = [];
-$prepared = null; // результат Importer::prepareUpload()/prepareFromDisk() либо восстановленный из скрытых полей формы
+$prepared = null; // результат Importer::prepareUpload()/ImportSource::prepareFromDisk() либо восстановленный из скрытых полей формы
 $diskFiles = null; // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске
 
 $iblockId = (int)($_REQUEST['IBLOCK_ID'] ?? 0);
@@ -44,10 +46,10 @@ while ($ib = $ibRes->Fetch()) {
 if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
     try {
         if ($iblockId <= 0) {
-            throw new Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
+            throw new \Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
         }
         if (!Rights::canImport($iblockId)) {
-            throw new Exception(GetMessage('IBIMPORT_ERR_NO_RIGHTS'));
+            throw new \Exception(GetMessage('IBIMPORT_ERR_NO_RIGHTS'));
         }
 
         if ($step === 'validate') {
@@ -57,23 +59,23 @@ if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
             // раздел 3) — недоступность Диска здесь не мешает обычной
             // ручной загрузке архива веткой STEP=validate выше.
             try {
-                $diskFiles = Importer::listDiskFiles();
-            } catch (YandexDiskException $e) {
+                $diskFiles = ImportSource::listDiskFiles();
+            } catch (Exception $e) {
                 $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
             }
         } elseif ($step === 'disk_import') {
             $diskPath = (string)($_REQUEST['DISK_PATH'] ?? '');
             if ($diskPath === '') {
-                throw new Exception(GetMessage('IBYADISK_ERR_NO_PATH'));
+                throw new \Exception(GetMessage('IBYADISK_ERR_NO_PATH'));
             }
             try {
-                $prepared = Importer::prepareFromDisk($diskPath);
-            } catch (YandexDiskException $e) {
-                throw new Exception(GetMessage('IBYADISK_DOWNLOAD_ERROR', ['#MESSAGE#' => $e->getMessage()]));
+                $prepared = ImportSource::prepareFromDisk($diskPath);
+            } catch (Exception $e) {
+                throw new \Exception(GetMessage('IBYADISK_DOWNLOAD_ERROR', ['#MESSAGE#' => $e->getMessage()]));
             }
         } else { // STEP=run — уже провалидированный на предыдущем шаге архив
             if (!check_bitrix_sessid()) {
-                throw new Exception(GetMessage('IBIMPORT_ERR_SESSID'));
+                throw new \Exception(GetMessage('IBIMPORT_ERR_SESSID'));
             }
 
             $tmpDirName = (string)($_REQUEST['TMP_DIR'] ?? '');
@@ -83,7 +85,7 @@ if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
             if ($parentSectionRef !== '') {
                 $parentSectionId = Exporter::resolveSectionId($iblockId, $parentSectionRef);
                 if (!$parentSectionId) {
-                    throw new Exception(GetMessage('IBIMPORT_ERR_PARENT_NOT_FOUND'));
+                    throw new \Exception(GetMessage('IBIMPORT_ERR_PARENT_NOT_FOUND'));
                 }
             }
 
@@ -208,7 +210,7 @@ $tabControl = new CAdminTabControl('tabControl', [
         <input type="submit" class="adm-btn adm-btn-save" value="<?= GetMessage('IBIMPORT_BTN_RUN') ?>">
     <?php else: ?>
         <button type="submit" name="STEP" value="validate" class="adm-btn adm-btn-save"><?= GetMessage('IBIMPORT_BTN_VALIDATE') ?></button>
-        <?php if (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()): ?>
+        <?php if (Options::isYandexDiskEnabled() && Settings::hasToken()): ?>
             <?php
             // Отдельная, независимая от загрузки файла кнопка (ТЗ "Экспорт
             // в Яндекс.Диск", раздел 3) — формметод GET, чтобы не заходить

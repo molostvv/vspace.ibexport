@@ -1,20 +1,20 @@
 <?php
 
-namespace Vspace\Ibexport\Tests;
+namespace Vspace\Ibexport\Tests\YandexDisk;
 
 use PHPUnit\Framework\TestCase;
-use Vspace\Ibexport\Tests\Fake\FakeYandexDiskTransport;
-use Vspace\Ibexport\YandexDiskClient;
-use Vspace\Ibexport\YandexDiskException;
+use Vspace\Ibexport\Tests\YandexDisk\Fake\FakeTransport;
+use Vspace\Ibexport\YandexDisk\Client;
+use Vspace\Ibexport\YandexDisk\Exception;
 
-final class YandexDiskClientTest extends TestCase
+final class ClientTest extends TestCase
 {
-    private FakeYandexDiskTransport $transport;
+    private FakeTransport $transport;
     private array $tempFiles = [];
 
     protected function setUp(): void
     {
-        $this->transport = new FakeYandexDiskTransport();
+        $this->transport = new FakeTransport();
     }
 
     protected function tearDown(): void
@@ -46,8 +46,8 @@ final class YandexDiskClientTest extends TestCase
 
     public function testConstructorRejectsEmptyToken(): void
     {
-        $this->expectException(YandexDiskException::class);
-        new YandexDiskClient('', $this->transport);
+        $this->expectException(Exception::class);
+        new Client('', $this->transport);
     }
 
     public function testCheckConnectionParsesLoginAndFreeSpace(): void
@@ -58,7 +58,7 @@ final class YandexDiskClientTest extends TestCase
             'used_space' => 400,
         ]));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
         $result = $client->checkConnection();
 
         self::assertSame('ivanov', $result['user_login']);
@@ -75,9 +75,9 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(0, 'connection refused');
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('недоступен');
         $client->checkConnection();
     }
@@ -89,12 +89,12 @@ final class YandexDiskClientTest extends TestCase
             'description' => 'OAuth token is invalid',
         ]));
 
-        $client = new YandexDiskClient('bad-token', $this->transport);
+        $client = new Client('bad-token', $this->transport);
 
         try {
             $client->checkConnection();
-            self::fail('Expected YandexDiskException was not thrown.');
-        } catch (YandexDiskException $e) {
+            self::fail('Expected Exception was not thrown.');
+        } catch (Exception $e) {
             self::assertSame(401, $e->getCode());
             self::assertStringContainsString('Unauthorized', $e->getMessage());
             self::assertStringContainsString('OAuth token is invalid', $e->getMessage());
@@ -105,15 +105,15 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(200, 'not json at all');
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $client->checkConnection();
     }
 
     public function testEnsureFolderAcceptsCreatedAndAlreadyExists(): void
     {
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
         $this->transport->queueResponse(201, '');
         $client->ensureFolder('/vspace.ibexport');
@@ -129,17 +129,17 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(500, json_encode(['message' => 'Internal error']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $client->ensureFolder('/vspace.ibexport');
     }
 
     public function testUploadFileRejectsMissingLocalFile(): void
     {
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $client->uploadFile('/vspace.ibexport/x.zip', '/no/such/file.zip');
 
         self::assertCount(0, $this->transport->calls);
@@ -147,13 +147,13 @@ final class YandexDiskClientTest extends TestCase
 
     public function testUploadFileRejectsFileOverSizeLimit(): void
     {
-        $bigFile = $this->makeTempFile(YandexDiskClient::MAX_FILE_SIZE + 1);
-        $client = new YandexDiskClient('token', $this->transport);
+        $bigFile = $this->makeTempFile(Client::MAX_FILE_SIZE + 1);
+        $client = new Client('token', $this->transport);
 
         try {
             $client->uploadFile('/vspace.ibexport/x.zip', $bigFile);
-            self::fail('Expected YandexDiskException was not thrown.');
-        } catch (YandexDiskException $e) {
+            self::fail('Expected Exception was not thrown.');
+        } catch (Exception $e) {
             self::assertStringContainsString('1 ГБ', $e->getMessage());
         }
 
@@ -169,7 +169,7 @@ final class YandexDiskClientTest extends TestCase
         $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader.example/put-here']));
         $this->transport->queueResponse(201, '');
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
         $client->uploadFile('/vspace.ibexport/job17.zip', $localFile, true);
 
         self::assertCount(2, $this->transport->calls);
@@ -188,9 +188,9 @@ final class YandexDiskClientTest extends TestCase
 
         $this->transport->queueResponse(200, json_encode(['href' => '']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $client->uploadFile('/vspace.ibexport/x.zip', $localFile);
     }
 
@@ -201,9 +201,9 @@ final class YandexDiskClientTest extends TestCase
         $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader.example/put-here']));
         $this->transport->queueResponse(507, json_encode(['message' => 'Insufficient Storage']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('Insufficient Storage');
         $client->uploadFile('/vspace.ibexport/x.zip', $localFile);
     }
@@ -217,7 +217,7 @@ final class YandexDiskClientTest extends TestCase
             ]],
         ]));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
         $files = $client->listFiles('/vspace.ibexport');
 
         self::assertCount(1, $files);
@@ -231,7 +231,7 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(404, json_encode(['message' => 'Not Found']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
         self::assertSame([], $client->listFiles('/vspace.ibexport'));
     }
 
@@ -239,9 +239,9 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(503, json_encode(['message' => 'Service Unavailable']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $client->listFiles('/vspace.ibexport');
     }
 
@@ -254,7 +254,7 @@ final class YandexDiskClientTest extends TestCase
         $this->transport->queueDownloadStatus(200);
         $this->transport->downloadWrittenContent = 'zip-bytes';
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
         $client->downloadFile('/vspace.ibexport/job17.zip', $destPath);
 
         self::assertFileExists($destPath);
@@ -266,9 +266,9 @@ final class YandexDiskClientTest extends TestCase
     {
         $this->transport->queueResponse(404, json_encode(['message' => 'Resource not found']));
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
-        $this->expectException(YandexDiskException::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('Resource not found');
         $client->downloadFile('/vspace.ibexport/missing.zip', sys_get_temp_dir() . '/unused.zip');
     }
@@ -280,12 +280,12 @@ final class YandexDiskClientTest extends TestCase
         $this->transport->queueResponse(200, json_encode(['href' => 'https://downloader.example/get-here']));
         $this->transport->queueDownloadStatus(500);
 
-        $client = new YandexDiskClient('token', $this->transport);
+        $client = new Client('token', $this->transport);
 
         try {
             $client->downloadFile('/vspace.ibexport/job17.zip', $destPath);
-            self::fail('Expected YandexDiskException was not thrown.');
-        } catch (YandexDiskException $e) {
+            self::fail('Expected Exception was not thrown.');
+        } catch (Exception $e) {
             self::assertFileDoesNotExist($destPath);
         }
     }

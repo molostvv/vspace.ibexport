@@ -61,52 +61,12 @@ class Importer
     }
 
     /**
-     * То же самое, что и "Проверить архив" при ручной загрузке, но источник
-     * файла — папка обмена на Яндекс.Диске, а не $_FILES (см. раздел 5 ТЗ
-     * "Экспорт в Яндекс.Диск": на проде это отдельная ручная кнопка
-     * «Импортировать» после «Проверить Диск», не встроенная в обычный
-     * процесс — недоступность Диска не мешает обычной ручной загрузке
-     * файла, см. admin/import.php).
+     * Общая часть prepareUpload() и YandexDisk\ImportSource::prepareFromDisk():
+     * распаковка уже сохранённого на диске ZIP и проверка/подсчёт export.xml.
+     * Публичный (а не private), т.к. используется из другого класса —
+     * см. lib/YandexDisk/ImportSource.php.
      */
-    public static function prepareFromDisk(string $diskPath): array
-    {
-        $token = Options::getYandexDiskToken();
-        if ($token === '') {
-            throw new \Exception('Интеграция с Яндекс.Диском не настроена (нет сохранённого токена).');
-        }
-
-        $tmpDirName = 'import_' . uniqid();
-        $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $tmpDirName;
-        if (!is_dir($tmpDir) && !mkdir($tmpDir, 0755, true) && !is_dir($tmpDir)) {
-            throw new \Exception('Не удалось создать временный каталог для импорта.');
-        }
-
-        $zipPath = $tmpDir . '/disk.zip';
-        // YandexDiskException пробрасывается как есть — вызывающая сторона
-        // (admin/import.php) сама решает, как отформатировать сообщение,
-        // единообразно с ошибками listDiskFiles().
-        $client = new YandexDiskClient($token);
-        $client->downloadFile($diskPath, $zipPath);
-
-        return self::extractAndValidate($zipPath, $tmpDir, $tmpDirName, basename($diskPath));
-    }
-
-    /** Список файлов в папке обмена на Яндекс.Диске — для кнопки «Проверить Диск» на странице импорта. */
-    public static function listDiskFiles(): array
-    {
-        $token = Options::getYandexDiskToken();
-        if ($token === '') {
-            throw new \Exception('Интеграция с Яндекс.Диском не настроена (нет сохранённого токена).');
-        }
-        $client = new YandexDiskClient($token);
-        return $client->listFiles(Options::getYandexDiskFolder());
-    }
-
-    /**
-     * Общая часть prepareUpload()/prepareFromDisk(): распаковка уже
-     * сохранённого на диске ZIP и проверка/подсчёт export.xml.
-     */
-    private static function extractAndValidate(string $zipPath, string $tmpDir, string $tmpDirName, string $sourceFileName): array
+    public static function extractAndValidate(string $zipPath, string $tmpDir, string $tmpDirName, string $sourceFileName): array
     {
         $zip = new \ZipArchive();
         $openResult = $zip->open($zipPath);

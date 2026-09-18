@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\JobTable;
 use Vspace\Ibexport\Options;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
 
@@ -84,7 +85,7 @@ if ($job['STATUS'] === JobTable::STATUS_DONE) {
     // "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск", раздел 3): недоступность
     // Диска не должна ронять/блокировать обычное скачивание, поэтому это
     // отдельная форма с собственным action, а не часть текущей страницы.
-    if (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()) {
+    if (Options::isYandexDiskEnabled() && Settings::hasToken()) {
         $downloadButtonHtml .= ' <form method="post" action="/bitrix/admin/vspace_ibexport_yandex_disk_upload.php" style="display:inline;">'
             . bitrix_sessid_post()
             . '<input type="hidden" name="lang" value="' . LANGUAGE_ID . '">'
@@ -111,7 +112,7 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
         // при завершении экспорта через AJAX-опрос (без перезагрузки
         // страницы) — см. progress.js, иначе кнопка появится только после
         // ручного обновления страницы уже завершённого задания.
-        yandexDiskEnabled: <?= (Options::isYandexDiskEnabled() && Options::hasYandexDiskToken()) ? 'true' : 'false' ?>,
+        yandexDiskEnabled: <?= (Options::isYandexDiskEnabled() && Settings::hasToken()) ? 'true' : 'false' ?>,
         messages: {
             running: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_RUNNING')) ?>,
             done: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_DONE')) ?>,

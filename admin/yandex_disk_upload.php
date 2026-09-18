@@ -6,8 +6,9 @@ use Bitrix\Main\Loader;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\JobTable;
 use Vspace\Ibexport\Options;
-use Vspace\Ibexport\YandexDiskClient;
-use Vspace\Ibexport\YandexDiskException;
+use Vspace\Ibexport\YandexDisk\Client;
+use Vspace\Ibexport\YandexDisk\Exception;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
 
@@ -40,21 +41,21 @@ if (!check_bitrix_sessid()) {
     $redirectBack('error', GetMessage('IBYADISK_ERR_SESSID'));
 }
 
-if (!Options::isYandexDiskEnabled() || !Options::hasYandexDiskToken()) {
+if (!Options::isYandexDiskEnabled() || !Settings::hasToken()) {
     $redirectBack('error', GetMessage('IBYADISK_NOT_CONFIGURED'));
 }
 
 try {
     $localPath = Exporter::getTmpDir($jobId) . '/' . $job['ARCHIVE_FILE'];
-    $folder = Options::getYandexDiskFolder();
+    $folder = Settings::getFolder();
     $diskPath = rtrim($folder, '/') . '/' . $job['ARCHIVE_FILE'];
 
-    $client = new YandexDiskClient(Options::getYandexDiskToken());
+    $client = new Client(Settings::getToken());
     $client->ensureFolder($folder);
     $client->uploadFile($diskPath, $localPath, true);
 
     $redirectBack('ok');
-} catch (YandexDiskException $e) {
+} catch (Exception $e) {
     $redirectBack('error', $e->getMessage());
 } catch (\Throwable $e) {
     $redirectBack('error', $e->getMessage());

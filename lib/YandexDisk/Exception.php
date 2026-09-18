@@ -1,8 +1,8 @@
 <?php
 
-namespace Vspace\Ibexport;
+namespace Vspace\Ibexport\YandexDisk;
 
 /** Ошибка обращения к Яндекс.Диску (сеть, авторизация, ответ API с кодом ошибки). */
-class YandexDiskException extends \Exception
+class Exception extends \Exception
 {
 }

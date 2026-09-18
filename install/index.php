@@ -173,10 +173,12 @@ class vspace_ibexport extends CModule
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',
             'Vspace\\Ibexport\\Integration\\AdminListIntegration' => 'lib/Integration/AdminListIntegration.php',
-            'Vspace\\Ibexport\\YandexDiskClient' => 'lib/YandexDiskClient.php',
-            'Vspace\\Ibexport\\YandexDiskException' => 'lib/YandexDiskException.php',
-            'Vspace\\Ibexport\\Http\\YandexDiskTransportInterface' => 'lib/Http/YandexDiskTransportInterface.php',
-            'Vspace\\Ibexport\\Http\\BitrixHttpTransport' => 'lib/Http/BitrixHttpTransport.php',
+            'Vspace\\Ibexport\\YandexDisk\\Client' => 'lib/YandexDisk/Client.php',
+            'Vspace\\Ibexport\\YandexDisk\\Exception' => 'lib/YandexDisk/Exception.php',
+            'Vspace\\Ibexport\\YandexDisk\\Settings' => 'lib/YandexDisk/Settings.php',
+            'Vspace\\Ibexport\\YandexDisk\\ImportSource' => 'lib/YandexDisk/ImportSource.php',
+            'Vspace\\Ibexport\\YandexDisk\\Http\\TransportInterface' => 'lib/YandexDisk/Http/TransportInterface.php',
+            'Vspace\\Ibexport\\YandexDisk\\Http\\BitrixHttpTransport' => 'lib/YandexDisk/Http/BitrixHttpTransport.php',
         ]);
 
         $this->InstallFiles();
