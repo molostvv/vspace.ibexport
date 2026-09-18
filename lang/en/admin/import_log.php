@@ -1,0 +1,20 @@
+<?php
+$MESS['IBIMPORT_LOG_TITLE'] = 'Import log';
+$MESS['IBIMPORT_LOG_COL_ID'] = 'ID';
+$MESS['IBIMPORT_LOG_COL_DATE'] = 'Date';
+$MESS['IBIMPORT_LOG_COL_IBLOCK'] = 'Iblock';
+$MESS['IBIMPORT_LOG_COL_MODE'] = 'Mode';
+$MESS['IBIMPORT_LOG_COL_STATUS'] = 'Status';
+$MESS['IBIMPORT_LOG_COL_COUNT'] = 'Sections / elements';
+$MESS['IBIMPORT_LOG_COL_RESULT'] = 'Result';
+$MESS['IBIMPORT_LOG_COL_ACTIONS'] = 'Actions';
+$MESS['IBIMPORT_LOG_VIEW_PROGRESS'] = 'View progress';
+$MESS['IBIMPORT_LOG_HAS_ERROR'] = 'Error';
+$MESS['IBIMPORT_MODE_ELEMENT'] = 'a single element';
+$MESS['IBIMPORT_MODE_SECTION_SINGLE'] = 'a section without nested ones';
+$MESS['IBIMPORT_MODE_SECTION_TREE'] = 'a section with all nested subsections';
+$MESS['IBIMPORT_STATUS_NEW'] = 'Queued';
+$MESS['IBIMPORT_STATUS_RUNNING'] = 'Running';
+$MESS['IBIMPORT_STATUS_DONE'] = 'Done';
+$MESS['IBIMPORT_STATUS_ERROR'] = 'Error';
+$MESS['IBIMPORT_SUMMARY'] = 'Created: #CREATED#, updated: #UPDATED#, skipped: #SKIPPED#.';

@@ -1,0 +1,17 @@
+<?php
+$MESS['IBEXPORT_PROGRESS_TITLE'] = 'Ход выполнения экспорта';
+$MESS['IBEXPORT_PROGRESS_TAB'] = 'Статус выполнения';
+$MESS['IBEXPORT_PROGRESS_STATUS'] = 'Статус';
+$MESS['IBEXPORT_PROGRESS_BAR'] = 'Прогресс';
+$MESS['IBEXPORT_PROGRESS_SECTIONS'] = 'Разделы (обработано / всего)';
+$MESS['IBEXPORT_PROGRESS_ELEMENTS'] = 'Элементы (обработано / всего)';
+$MESS['IBEXPORT_PROGRESS_RUNNING'] = 'Выполняется...';
+$MESS['IBEXPORT_PROGRESS_DONE'] = 'Экспорт завершён.';
+$MESS['IBEXPORT_PROGRESS_ERROR'] = 'Ошибка экспорта';
+$MESS['IBEXPORT_BTN_DOWNLOAD'] = 'Скачать архив';
+$MESS['IBEXPORT_STATUS_NEW'] = 'В очереди';
+$MESS['IBEXPORT_STATUS_RUNNING'] = 'Выполняется';
+$MESS['IBEXPORT_STATUS_DONE'] = 'Завершено';
+$MESS['IBEXPORT_STATUS_ERROR'] = 'Ошибка';
+$MESS['IBEXPORT_ERR_JOB_NOT_FOUND'] = 'Задание экспорта не найдено или недоступно.';
+$MESS['IBEXPORT_ERR_SESSID'] = 'Истекла сессия. Обновите страницу и повторите попытку.';

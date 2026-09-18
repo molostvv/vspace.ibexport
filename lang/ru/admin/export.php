@@ -1,0 +1,23 @@
+<?php
+$MESS['IBEXPORT_EXPORT_TITLE'] = 'Экспорт элементов и разделов инфоблока';
+$MESS['IBEXPORT_FORM_HEADING'] = 'Параметры выгрузки';
+$MESS['IBEXPORT_FIELD_IBLOCK'] = 'Инфоблок';
+$MESS['IBEXPORT_FIELD_ENTITY_TYPE'] = 'Тип сущности';
+$MESS['IBEXPORT_ENTITY_ELEMENT'] = 'Элемент';
+$MESS['IBEXPORT_ENTITY_SECTION'] = 'Раздел';
+$MESS['IBEXPORT_FIELD_ID'] = 'ID или код';
+$MESS['IBEXPORT_FIELD_MODE'] = 'Режим (для раздела)';
+$MESS['IBEXPORT_MODE_SINGLE'] = 'Только этот раздел (без вложенных)';
+$MESS['IBEXPORT_MODE_TREE'] = 'Этот раздел со всеми вложенными подразделами';
+$MESS['IBEXPORT_MODE_HINT'] = 'Для типа "Элемент" режим не применяется.';
+$MESS['IBEXPORT_FIELD_FILES'] = 'Выгружать файлы';
+$MESS['IBEXPORT_FIELD_ACTIVE_ONLY'] = 'Только активные';
+$MESS['IBEXPORT_BTN_ESTIMATE'] = 'Рассчитать объём';
+$MESS['IBEXPORT_BTN_RUN'] = 'Запустить экспорт';
+$MESS['IBEXPORT_ESTIMATE'] = 'Будет выгружено: разделов — #SECTIONS#, элементов — #ELEMENTS#.';
+$MESS['IBEXPORT_ERR_NO_IBLOCK'] = 'Не выбран инфоблок.';
+$MESS['IBEXPORT_ERR_NO_RIGHTS'] = 'Недостаточно прав для экспорта данного инфоблока.';
+$MESS['IBEXPORT_ERR_NO_ID'] = 'Не указан ID или код сущности.';
+$MESS['IBEXPORT_ERR_ELEMENT_NOT_FOUND'] = 'Элемент с указанным ID/кодом не найден в выбранном инфоблоке.';
+$MESS['IBEXPORT_ERR_SECTION_NOT_FOUND'] = 'Раздел с указанным ID/кодом не найден в выбранном инфоблоке.';
+$MESS['IBEXPORT_ERR_SESSID'] = 'Истекла сессия. Обновите страницу и повторите попытку.';

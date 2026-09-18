@@ -1,0 +1,19 @@
+<?php
+$MESS['IBEXPORT_LOG_TITLE'] = 'Export log';
+$MESS['IBEXPORT_LOG_COL_ID'] = 'ID';
+$MESS['IBEXPORT_LOG_COL_DATE'] = 'Date';
+$MESS['IBEXPORT_LOG_COL_IBLOCK'] = 'IBlock';
+$MESS['IBEXPORT_LOG_COL_ENTITY'] = 'Entity';
+$MESS['IBEXPORT_LOG_COL_MODE'] = 'Mode';
+$MESS['IBEXPORT_LOG_COL_STATUS'] = 'Status';
+$MESS['IBEXPORT_LOG_COL_COUNT'] = 'Sections / elements';
+$MESS['IBEXPORT_LOG_COL_SIZE'] = 'Archive size';
+$MESS['IBEXPORT_LOG_COL_ACTIONS'] = 'Actions';
+$MESS['IBEXPORT_LOG_EMPTY'] = 'No exports yet.';
+$MESS['IBEXPORT_LOG_VIEW_PROGRESS'] = 'View progress';
+$MESS['IBEXPORT_LOG_HAS_ERROR'] = 'Error (hover for details)';
+$MESS['IBEXPORT_BTN_DOWNLOAD'] = 'Download';
+$MESS['IBEXPORT_STATUS_NEW'] = 'New';
+$MESS['IBEXPORT_STATUS_RUNNING'] = 'Running';
+$MESS['IBEXPORT_STATUS_DONE'] = 'Done';
+$MESS['IBEXPORT_STATUS_ERROR'] = 'Error';

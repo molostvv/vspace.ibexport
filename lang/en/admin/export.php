@@ -1,0 +1,23 @@
+<?php
+$MESS['IBEXPORT_EXPORT_TITLE'] = 'Export iblock elements and sections';
+$MESS['IBEXPORT_FORM_HEADING'] = 'Export parameters';
+$MESS['IBEXPORT_FIELD_IBLOCK'] = 'IBlock';
+$MESS['IBEXPORT_FIELD_ENTITY_TYPE'] = 'Entity type';
+$MESS['IBEXPORT_ENTITY_ELEMENT'] = 'Element';
+$MESS['IBEXPORT_ENTITY_SECTION'] = 'Section';
+$MESS['IBEXPORT_FIELD_ID'] = 'ID or code';
+$MESS['IBEXPORT_FIELD_MODE'] = 'Mode (for sections)';
+$MESS['IBEXPORT_MODE_SINGLE'] = 'This section only (no subsections)';
+$MESS['IBEXPORT_MODE_TREE'] = 'This section with all nested subsections';
+$MESS['IBEXPORT_MODE_HINT'] = 'Not applicable for "Element".';
+$MESS['IBEXPORT_FIELD_FILES'] = 'Export files';
+$MESS['IBEXPORT_FIELD_ACTIVE_ONLY'] = 'Active only';
+$MESS['IBEXPORT_BTN_ESTIMATE'] = 'Estimate size';
+$MESS['IBEXPORT_BTN_RUN'] = 'Run export';
+$MESS['IBEXPORT_ESTIMATE'] = 'Will export: sections — #SECTIONS#, elements — #ELEMENTS#.';
+$MESS['IBEXPORT_ERR_NO_IBLOCK'] = 'No iblock selected.';
+$MESS['IBEXPORT_ERR_NO_RIGHTS'] = 'Insufficient rights to export this iblock.';
+$MESS['IBEXPORT_ERR_NO_ID'] = 'Entity ID/code is required.';
+$MESS['IBEXPORT_ERR_ELEMENT_NOT_FOUND'] = 'Element with the given ID/code was not found in the selected iblock.';
+$MESS['IBEXPORT_ERR_SECTION_NOT_FOUND'] = 'Section with the given ID/code was not found in the selected iblock.';
+$MESS['IBEXPORT_ERR_SESSID'] = 'Session expired. Reload the page and try again.';

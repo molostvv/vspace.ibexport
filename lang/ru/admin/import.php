@@ -1,0 +1,19 @@
+<?php
+$MESS['IBIMPORT_TITLE'] = 'Импорт элементов и разделов инфоблока';
+$MESS['IBIMPORT_FORM_HEADING'] = 'Параметры импорта';
+$MESS['IBIMPORT_FIELD_IBLOCK'] = 'Инфоблок (куда импортировать)';
+$MESS['IBIMPORT_FIELD_FILE'] = 'Архив выгрузки (.zip)';
+$MESS['IBIMPORT_FILE_LOADED'] = 'Загружен файл: #NAME#. Чтобы выбрать другой — прикрепите его и нажмите "Проверить архив" ещё раз.';
+$MESS['IBIMPORT_FIELD_PARENT_SECTION'] = 'Родительский раздел';
+$MESS['IBIMPORT_PARENT_SECTION_HINT'] = 'ID или символьный код раздела в целевом инфоблоке, куда поместить импортируемое дерево. Пусто — в корень инфоблока. Не используется для режима "элемент" — там раздел(ы) определяются привязкой самого элемента.';
+$MESS['IBIMPORT_FIELD_UPDATE_BY_CODE'] = 'Обновлять существующие по символьному коду';
+$MESS['IBIMPORT_ESTIMATE'] = 'Архив проверен: режим — #MODE#. Будет обработано: разделов — #SECTIONS#, элементов — #ELEMENTS#.';
+$MESS['IBIMPORT_MODE_ELEMENT'] = 'один элемент';
+$MESS['IBIMPORT_MODE_SECTION_SINGLE'] = 'раздел без вложенных';
+$MESS['IBIMPORT_MODE_SECTION_TREE'] = 'раздел со всеми вложенными подразделами';
+$MESS['IBIMPORT_BTN_VALIDATE'] = 'Проверить архив';
+$MESS['IBIMPORT_BTN_RUN'] = 'Запустить импорт';
+$MESS['IBIMPORT_ERR_NO_IBLOCK'] = 'Не выбран инфоблок.';
+$MESS['IBIMPORT_ERR_NO_RIGHTS'] = 'Недостаточно прав для импорта в выбранный инфоблок.';
+$MESS['IBIMPORT_ERR_SESSID'] = 'Истекла сессия. Обновите страницу и повторите попытку.';
+$MESS['IBIMPORT_ERR_PARENT_NOT_FOUND'] = 'Указанный родительский раздел не найден в выбранном инфоблоке.';

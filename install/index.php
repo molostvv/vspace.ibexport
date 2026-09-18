@@ -1,0 +1,197 @@
+<?php
+
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
+
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
+    die();
+}
+
+Loader::includeModule('main');
+
+class vspace_ibexport extends CModule
+{
+    public $MODULE_ID = 'vspace.ibexport';
+    public $MODULE_VERSION;
+    public $MODULE_VERSION_DATE;
+    public $MODULE_NAME;
+    public $MODULE_DESCRIPTION;
+    public $MODULE_GROUP_RIGHTS = 'Y';
+    public $PARTNER_NAME = 'vspace';
+
+    public function __construct()
+    {
+        $arModuleVersion = [];
+        include __DIR__ . '/version.php';
+        $this->MODULE_VERSION = $arModuleVersion['VERSION'];
+        $this->MODULE_VERSION_DATE = $arModuleVersion['VERSION_DATE'];
+
+        $langFile = __DIR__ . '/../lang/' . LANGUAGE_ID . '/install/index.php';
+        include_once file_exists($langFile) ? $langFile : __DIR__ . '/../lang/en/install/index.php';
+
+        $this->MODULE_NAME = isset($MESS['IBEXPORT_MODULE_NAME']) ? $MESS['IBEXPORT_MODULE_NAME'] : 'IBlock Export';
+        $this->MODULE_DESCRIPTION = isset($MESS['IBEXPORT_MODULE_DESC']) ? $MESS['IBEXPORT_MODULE_DESC'] : 'Export of iblock elements and sections';
+    }
+
+    public function InstallDB()
+    {
+        Loader::includeModule($this->MODULE_ID);
+
+        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class] as $tableClass) {
+            $entity = $tableClass::getEntity();
+            if (!$entity->getConnection()->isTableExists($entity->getDbTableName())) {
+                $entity->createDbTable();
+            }
+        }
+
+        return true;
+    }
+
+    public function UnInstallDB()
+    {
+        Loader::includeModule($this->MODULE_ID);
+
+        $connection = Application::getConnection();
+        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class] as $tableClass) {
+            $entity = $tableClass::getEntity();
+            if ($entity->getConnection()->isTableExists($entity->getDbTableName())) {
+                $connection->dropTable($entity->getDbTableName());
+            }
+        }
+
+        return true;
+    }
+
+    public function InstallFiles()
+    {
+        CopyDirFiles(
+            __DIR__ . '/admin',
+            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin',
+            true,
+            true
+        );
+
+        return true;
+    }
+
+    public function UnInstallFiles()
+    {
+        $files = [
+            'vspace_ibexport_export.php',
+            'vspace_ibexport_progress.php',
+            'vspace_ibexport_download.php',
+            'vspace_ibexport_log.php',
+            'vspace_ibexport_context.php',
+            'vspace_ibexport_import.php',
+            'vspace_ibexport_import_progress.php',
+            'vspace_ibexport_import_log.php',
+        ];
+        foreach ($files as $file) {
+            $path = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/' . $file;
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+
+        return true;
+    }
+
+    public function InstallEvents()
+    {
+        $eventManager = \Bitrix\Main\EventManager::getInstance();
+        $eventManager->registerEventHandler(
+            'main',
+            'OnAdminListDisplay',
+            $this->MODULE_ID,
+            '\\Vspace\\Ibexport\\Integration\\AdminListIntegration',
+            'onAdminListDisplay'
+        );
+
+        // Периодическая очистка просроченных временных файлов и записей заданий (раздел 8 ТЗ).
+        CAgent::AddAgent(
+            '\\Vspace\\Ibexport\\Exporter::cleanupAgent();',
+            $this->MODULE_ID,
+            'N',
+            3600,
+            '',
+            'Y',
+            \Bitrix\Main\Type\DateTime::createFromTimestamp(time() + 3600)->toString(),
+            50
+        );
+
+        // Та же периодическая очистка, но для заданий и временных каталогов импорта.
+        CAgent::AddAgent(
+            '\\Vspace\\Ibexport\\Importer::cleanupAgent();',
+            $this->MODULE_ID,
+            'N',
+            3600,
+            '',
+            'Y',
+            \Bitrix\Main\Type\DateTime::createFromTimestamp(time() + 3600)->toString(),
+            50
+        );
+
+        return true;
+    }
+
+    public function UnInstallEvents()
+    {
+        $eventManager = \Bitrix\Main\EventManager::getInstance();
+        $eventManager->unRegisterEventHandler(
+            'main',
+            'OnAdminListDisplay',
+            $this->MODULE_ID,
+            '\\Vspace\\Ibexport\\Integration\\AdminListIntegration',
+            'onAdminListDisplay'
+        );
+
+        CAgent::RemoveModuleAgents($this->MODULE_ID);
+
+        return true;
+    }
+
+    public function DoInstall()
+    {
+        global $APPLICATION;
+
+        if (!Loader::includeModule('iblock')) {
+            $APPLICATION->ThrowException('Для работы модуля необходим установленный модуль "Информационные блоки" (iblock).');
+            return false;
+        }
+
+        ModuleManager::registerModule($this->MODULE_ID);
+
+        Loader::registerAutoLoadClasses($this->MODULE_ID, [
+            'Vspace\\Ibexport\\Exporter' => 'lib/Exporter.php',
+            'Vspace\\Ibexport\\Importer' => 'lib/Importer.php',
+            'Vspace\\Ibexport\\JobTable' => 'lib/JobTable.php',
+            'Vspace\\Ibexport\\ImportJobTable' => 'lib/ImportJobTable.php',
+            'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
+            'Vspace\\Ibexport\\Options' => 'lib/Options.php',
+            'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',
+            'Vspace\\Ibexport\\Integration\\AdminListIntegration' => 'lib/Integration/AdminListIntegration.php',
+        ]);
+
+        $this->InstallFiles();
+        $this->InstallDB();
+        $this->InstallEvents();
+
+        return true;
+    }
+
+    public function DoUninstall()
+    {
+        $this->UnInstallEvents();
+        $this->UnInstallFiles();
+        $this->UnInstallDB();
+
+        if (method_exists(Loader::class, 'unRegisterAutoLoadClasses')) {
+            Loader::unRegisterAutoLoadClasses($this->MODULE_ID);
+        }
+
+        ModuleManager::unRegisterModule($this->MODULE_ID);
+
+        return true;
+    }
+}

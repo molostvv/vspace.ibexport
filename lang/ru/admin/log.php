@@ -1,0 +1,19 @@
+<?php
+$MESS['IBEXPORT_LOG_TITLE'] = 'Журнал выгрузок';
+$MESS['IBEXPORT_LOG_COL_ID'] = 'ID';
+$MESS['IBEXPORT_LOG_COL_DATE'] = 'Дата';
+$MESS['IBEXPORT_LOG_COL_IBLOCK'] = 'Инфоблок';
+$MESS['IBEXPORT_LOG_COL_ENTITY'] = 'Сущность';
+$MESS['IBEXPORT_LOG_COL_MODE'] = 'Режим';
+$MESS['IBEXPORT_LOG_COL_STATUS'] = 'Статус';
+$MESS['IBEXPORT_LOG_COL_COUNT'] = 'Разделов / элементов';
+$MESS['IBEXPORT_LOG_COL_SIZE'] = 'Размер архива';
+$MESS['IBEXPORT_LOG_COL_ACTIONS'] = 'Действия';
+$MESS['IBEXPORT_LOG_EMPTY'] = 'Выгрузок пока не было.';
+$MESS['IBEXPORT_LOG_VIEW_PROGRESS'] = 'Смотреть прогресс';
+$MESS['IBEXPORT_LOG_HAS_ERROR'] = 'Ошибка (наведите курсор)';
+$MESS['IBEXPORT_BTN_DOWNLOAD'] = 'Скачать';
+$MESS['IBEXPORT_STATUS_NEW'] = 'Новое';
+$MESS['IBEXPORT_STATUS_RUNNING'] = 'Выполняется';
+$MESS['IBEXPORT_STATUS_DONE'] = 'Завершено';
+$MESS['IBEXPORT_STATUS_ERROR'] = 'Ошибка';

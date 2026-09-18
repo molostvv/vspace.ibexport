@@ -1,0 +1,19 @@
+<?php
+$MESS['IBIMPORT_TITLE'] = 'Import iblock elements and sections';
+$MESS['IBIMPORT_FORM_HEADING'] = 'Import parameters';
+$MESS['IBIMPORT_FIELD_IBLOCK'] = 'Iblock (import target)';
+$MESS['IBIMPORT_FIELD_FILE'] = 'Export archive (.zip)';
+$MESS['IBIMPORT_FILE_LOADED'] = 'Loaded file: #NAME#. To pick another one, attach it and press "Validate archive" again.';
+$MESS['IBIMPORT_FIELD_PARENT_SECTION'] = 'Parent section';
+$MESS['IBIMPORT_PARENT_SECTION_HINT'] = 'ID or code of the section in the target iblock to attach the imported tree under. Empty — top level. Not used for "element" mode — there the section(s) come from the element\'s own binding.';
+$MESS['IBIMPORT_FIELD_UPDATE_BY_CODE'] = 'Update existing items by code';
+$MESS['IBIMPORT_ESTIMATE'] = 'Archive validated: mode — #MODE#. Will process: sections — #SECTIONS#, elements — #ELEMENTS#.';
+$MESS['IBIMPORT_MODE_ELEMENT'] = 'a single element';
+$MESS['IBIMPORT_MODE_SECTION_SINGLE'] = 'a section without nested ones';
+$MESS['IBIMPORT_MODE_SECTION_TREE'] = 'a section with all nested subsections';
+$MESS['IBIMPORT_BTN_VALIDATE'] = 'Validate archive';
+$MESS['IBIMPORT_BTN_RUN'] = 'Start import';
+$MESS['IBIMPORT_ERR_NO_IBLOCK'] = 'No iblock selected.';
+$MESS['IBIMPORT_ERR_NO_RIGHTS'] = 'Not enough rights to import into the selected iblock.';
+$MESS['IBIMPORT_ERR_SESSID'] = 'Session expired. Reload the page and try again.';
+$MESS['IBIMPORT_ERR_PARENT_NOT_FOUND'] = 'The specified parent section was not found in the selected iblock.';
