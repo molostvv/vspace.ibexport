@@ -113,6 +113,33 @@ $tabControl = new CAdminTabControl('tabControl', [
 ]);
 ?>
 
+<style>
+    /* Общий "нейтральный" блок примечания (оценка архива, пустой список
+       Диска) — объявлен один раз для всей страницы, а не только когда
+       есть результат "Проверить архив", иначе на пустом "Проверить Диск"
+       класс использовался бы без единого правила CSS для него на странице. */
+    .vibx-note {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        margin-top: 15px;
+        padding: 12px 16px;
+        background: #f5f6f7;
+        border: 1px solid #d5dbe0;
+        border-radius: 3px;
+        color: #2b3446;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .vibx-list-heading {
+        margin-top: 15px;
+        margin-bottom: 6px;
+        font-size: 13px;
+        font-weight: bold;
+        color: #2b3446;
+    }
+</style>
+
 <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_import_form" enctype="multipart/form-data">
     <?php $tabControl->Begin(); ?>
     <?= bitrix_sessid_post() ?>
@@ -163,21 +190,6 @@ $tabControl = new CAdminTabControl('tabControl', [
                         '#ELEMENTS#' => $prepared['elements'],
                     ]) ?>
                 </div>
-                <style>
-                    .vibx-note {
-                        display: flex;
-                        align-items: center;
-                        box-sizing: border-box;
-                        margin-top: 15px;
-                        padding: 12px 16px;
-                        background: #f5f6f7;
-                        border: 1px solid #d5dbe0;
-                        border-radius: 3px;
-                        color: #2b3446;
-                        font-size: 13px;
-                        line-height: 1.4;
-                    }
-                </style>
             </td>
         </tr>
         <input type="hidden" name="TMP_DIR" value="<?= htmlspecialcharsbx($prepared['tmp_dir']) ?>">
@@ -207,45 +219,51 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php
     // Список файлов на Диске — превью-список для выбора файла перед
     // импортом, а не постоянная сущность с сортировкой/фильтрами/БД, для
-    // которой создан CAdminList/CAdminUiList — поэтому здесь обычная
-    // таблица, оформленная штатными классами адм-списка (adm-list-table*)
-    // для визуальной консистентности, а не полноценный список ядра.
+    // которой создан CAdminList/CAdminUiList — поэтому здесь не полноценный
+    // список ядра, а обычная таблица. Но именно вложенная разметка
+    // (adm-list-table-wrap снаружи, adm-list-table-cell-inner в каждой
+    // ячейке) — это то, что и в ядровом CAdminList реально даёт рамку,
+    // скругление и внутренние отступы (см. bitrix/modules/main/interface/
+    // admin_list.php) — без неё классы adm-list-table* остаются почти без
+    // видимого эффекта, только сами имена классов.
     ?>
-    <div class="vibx-note" style="display: block;">
-        <strong><?= GetMessage('IBYADISK_LIST_HEADING') ?></strong>
-        <?php if (!$diskFiles): ?>
-            <div style="margin-top: 8px;"><?= GetMessage('IBYADISK_LIST_EMPTY') ?></div>
-        <?php else: ?>
-            <table class="adm-list-table" style="margin-top: 8px; width: 100%;">
+    <div class="vibx-list-heading"><?= GetMessage('IBYADISK_LIST_HEADING') ?></div>
+    <?php if (!$diskFiles): ?>
+        <div class="vibx-note"><?= GetMessage('IBYADISK_LIST_EMPTY') ?></div>
+    <?php else: ?>
+        <div class="adm-list-table-wrap">
+            <table class="adm-list-table" style="width: 100%;">
                 <thead>
                 <tr class="adm-list-table-header">
-                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_NAME') ?></td>
-                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_SIZE') ?></td>
-                    <td class="adm-list-table-cell"><?= GetMessage('IBYADISK_COL_MODIFIED') ?></td>
-                    <td class="adm-list-table-cell"></td>
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_NAME') ?></div></td>
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_SIZE') ?></div></td>
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_MODIFIED') ?></div></td>
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">&nbsp;</div></td>
                 </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($diskFiles as $file): ?>
                     <tr class="adm-list-table-row">
-                        <td class="adm-list-table-cell"><?= htmlspecialcharsbx($file['name']) ?></td>
-                        <td class="adm-list-table-cell"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></td>
-                        <td class="adm-list-table-cell"><?= htmlspecialcharsbx($file['modified']) ?></td>
+                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx($file['name']) ?></div></td>
+                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></div></td>
+                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx($file['modified']) ?></div></td>
                         <td class="adm-list-table-cell">
-                            <form method="get" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
-                                <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
-                                <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
-                                <input type="hidden" name="STEP" value="disk_import">
-                                <input type="hidden" name="DISK_PATH" value="<?= htmlspecialcharsbx($file['path']) ?>">
-                                <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">
-                            </form>
+                            <div class="adm-list-table-cell-inner">
+                                <form method="get" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
+                                    <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
+                                    <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
+                                    <input type="hidden" name="STEP" value="disk_import">
+                                    <input type="hidden" name="DISK_PATH" value="<?= htmlspecialcharsbx($file['path']) ?>">
+                                    <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
-        <?php endif; ?>
-    </div>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php
