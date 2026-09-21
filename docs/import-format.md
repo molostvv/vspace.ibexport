@@ -37,7 +37,7 @@
 
 ## Возобновление и большие деревья
 
-Как и экспорт, импорт режимов `section_single`/`section_tree` выполняется тиками, ограниченными по времени (`Options::getTickBudgetSeconds()`), с возобновлением между тиками. Курсор обхода — путь индексов от корня по уже распакованному `export.xml` — хранится в `STATE_JSON` записи `vspace_ibexport_import_job` (см. `lib/Importer.php`).
+Как и экспорт, импорт режимов `section_single`/`section_tree` выполняется тиками, ограниченными по времени (`Options::getTickBudgetSeconds()`), с возобновлением между тиками. Курсор обхода — путь индексов от корня по уже распакованному `export.xml` — хранится в `STATE_JSON` записи `vspace_ibexport_import_job` (см. `lib/Import/SectionTreeWalker.php`).
 
 ## Журнал и предупреждения
 

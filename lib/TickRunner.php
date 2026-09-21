@@ -8,9 +8,9 @@ use Bitrix\Main\Type\DateTime;
  * Общий движок фонового задания (раздел 8 ТЗ модуля): один ограниченный по
  * времени тик работы, защита от параллельных тиков, самопланирующийся агент
  * CAgent и единый вид прогресса. Одинаков для экспорта и импорта — вид
- * задания задают таблица заданий, класс-владелец агента, префикс записей
- * журнала событий и два колбэка: сам шаг обработки ($tick) и добавочные
- * поля прогресса ($progressExtras).
+ * задания задают таблица заданий, класс-владелец агента, журнал событий и
+ * два колбэка: сам шаг обработки ($tick) и добавочные поля прогресса
+ * ($progressExtras).
  *
  * Не хранит состояния между вызовами — всё в записи задания (AbstractJobTable),
  * поэтому фасады Exporter/Importer могут создавать экземпляр на каждый вызов.
@@ -20,14 +20,14 @@ final class TickRunner
     /**
      * @param class-string<AbstractJobTable> $tableClass Таблица заданий этого вида
      * @param class-string $agentClass Класс со статическим agentTick(int $jobId): string — имя попадает в запись агента CAgent
-     * @param string $auditPrefix Префикс AUDIT_TYPE_ID записей журнала событий (за ним следует ERROR/DONE)
+     * @param JobEventLog $eventLog Журнал событий этого вида задания (сюда же пишет завершение шаг обработки)
      * @param \Closure(array, float): void $tick Один тик работы над заданием: получает строку задания и крайний срок (microtime); бросает исключение при ошибке
      * @param \Closure(array): array|null $progressExtras Поля прогресса, специфичные для вида задания
      */
     public function __construct(
         private string $tableClass,
         private string $agentClass,
-        private string $auditPrefix,
+        private JobEventLog $eventLog,
         private string $notFoundMessage,
         private \Closure $tick,
         private ?\Closure $progressExtras = null
@@ -114,7 +114,7 @@ final class TickRunner
                 'ERROR_MESSAGE' => $e->getMessage(),
                 'DATE_FINISH' => new DateTime(),
             ]);
-            $this->logEvent('ERROR', $jobId, $e->getMessage());
+            $this->eventLog->error($jobId, $e->getMessage());
             $job = $table::getJobById($jobId);
         } finally {
             $table::unlock($jobId);
@@ -141,18 +141,6 @@ final class TickRunner
         ];
 
         return $this->progressExtras ? $progress + ($this->progressExtras)($job) : $progress;
-    }
-
-    /** Запись в штатный журнал событий Bitrix (\CEventLog): $type — ERROR либо DONE. */
-    public function logEvent(string $type, int $jobId, string $message): void
-    {
-        \CEventLog::Add([
-            'SEVERITY' => $type === 'ERROR' ? 'ERROR' : 'INFO',
-            'AUDIT_TYPE_ID' => $this->auditPrefix . $type,
-            'MODULE_ID' => 'vspace.ibexport',
-            'ITEM_ID' => $jobId,
-            'DESCRIPTION' => $message,
-        ]);
     }
 
     /**

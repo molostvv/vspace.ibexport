@@ -64,11 +64,33 @@
 
 ## Архитектура
 
-- `lib/Exporter.php` / `lib/Importer.php` — основная логика, тик-бюджетный
-  DFS-обход дерева разделов с сохранением состояния обхода для
-  возобновления после разрыва.
-- `lib/JobTable.php` / `lib/ImportJobTable.php` — ORM-таблицы заданий
-  (`DataManager`).
+- `lib/Exporter.php` / `lib/Importer.php` — тонкие фасады (публичный API
+  модуля): расчёт объёма, создание задания, тик агента/AJAX-опроса. Сама
+  работа делегирована коллабораторам ниже.
+- `lib/AbstractJobTable.php` — общая основа ORM-таблиц заданий
+  (`DataManager`): служебные поля, `STATUS_*`, атомарный захват задания на
+  тик (`tryLock()`/`unlock()`), расчёт процента. Наследники:
+  `lib/JobTable.php` (экспорт) и `lib/ImportJobTable.php` (импорт) — только
+  собственные поля.
+- `lib/TickRunner.php` — общий движок фонового задания (шаблон тика:
+  проверка статуса, блокировка, `try/catch/finally`, перепланирование
+  `CAgent`, `toProgress()`), одинаков для экспорта и импорта; конкретный
+  шаг тика ему передаётся колбэком. `lib/JobEventLog.php` — запись в
+  журнал событий Bitrix.
+- `lib/Export/` — экспорт: `ExportStep` (один тик: стадии
+  `init → traverse → finalize`), `SectionTreeWalker` (возобновляемый
+  тик-бюджетный DFS-обход дерева разделов), `SectionWriter` /
+  `ElementWriter` / `FileRefWriter` (XML-узлы), `ArchiveBuilder` (ZIP),
+  `TreeSourceInterface` + `BitrixTreeSource` (источник дерева — граница
+  для тестов), `ExportContext`.
+- `lib/Import/` — импорт: `ImportStep` (один тик), `SectionTreeWalker`
+  (зеркальный обход по распакованному XML), `SectionImporter` /
+  `ElementImporter` (создание/обновление записи), `PropertyResolver`
+  (XML-описание свойств → массив для `SetPropertyValuesEx`) с границами
+  `PropertySourceInterface` / `FileArrayFactoryInterface`, `ImportReport`
+  (счётчики и предупреждения), `ImportContext`.
+- `lib/WalkResult.php` — итог одной порции обхода (стек + обработанные
+  узлы), общий для экспорта и импорта.
 - `lib/Integration/AdminListIntegration.php` — внедрение пункта "Экспорт" в
   списки элементов/разделов через `main::OnAdminListDisplay`.
 - `lib/Rights.php` — проверка прав на экспорт/импорт по конкретному

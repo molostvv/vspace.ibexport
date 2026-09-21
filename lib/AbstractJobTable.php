@@ -61,6 +61,12 @@ abstract class AbstractJobTable extends DataManager
         return $row ?: null;
     }
 
+    /** Абсолютный путь рабочего каталога задания (TMP_DIR — имя каталога внутри VSPACE_IBEXPORT_TMP_DIR). */
+    public static function getTmpPath(array $job): string
+    {
+        return $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $job['TMP_DIR'];
+    }
+
     /** Задание завершено (успешно или с ошибкой) — дальнейшие тики ему не нужны. */
     public static function isFinished(array $job): bool
     {
