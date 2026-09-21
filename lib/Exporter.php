@@ -151,118 +151,53 @@ class Exporter
         self::ensureTmpDir($id);
 
         if (($est['sections'] + $est['elements']) > Options::getSyncThreshold()) {
-            self::scheduleAgent($id);
+            self::runner()->scheduleAgent($id);
         }
 
         return $id;
     }
 
-    private static function scheduleAgent(int $jobId): void
-    {
-        $call = '\\Vspace\\Ibexport\\Exporter::agentTick(' . $jobId . ');';
-        \CAgent::AddAgent(
-            $call,
-            'vspace.ibexport',
-            'N',
-            5,
-            '',
-            'Y',
-            DateTime::createFromTimestamp(time())->toString()
-        );
-    }
-
     /** Колбэк CAgent для одного задания. Возвращает себя же для перепланирования, либо '' при завершении. */
     public static function agentTick(int $jobId): string
     {
-        $call = '\\Vspace\\Ibexport\\Exporter::agentTick(' . $jobId . ');';
-
-        $job = JobTable::getJobById($jobId);
-        if (!$job || in_array($job['STATUS'], [JobTable::STATUS_DONE, JobTable::STATUS_ERROR], true)) {
-            \CAgent::RemoveAgent($call, 'vspace.ibexport');
-            return '';
-        }
-
-        self::runStep($jobId);
-
-        $job = JobTable::getJobById($jobId);
-        if (!$job || in_array($job['STATUS'], [JobTable::STATUS_DONE, JobTable::STATUS_ERROR], true)) {
-            \CAgent::RemoveAgent($call, 'vspace.ibexport');
-            return '';
-        }
-
-        return $call;
+        return self::runner()->agentTick($jobId);
     }
 
     /**
      * Выполняет один ограниченный по времени тик работы над заданием
      * (раздел 8: батчами, с бюджетом времени, без разрастания памяти).
      * Безопасно вызывать повторно и "параллельно" — из AJAX-опроса и/или
-     * фонового агента одновременно (см. блокировку JobTable::tryLock ниже).
+     * фонового агента одновременно (см. TickRunner и AbstractJobTable::tryLock()).
      */
     public static function runStep(int $jobId): array
     {
-        $job = JobTable::getJobById($jobId);
-        if (!$job) {
-            throw new \Exception('Задание экспорта не найдено.');
-        }
-
-        if (in_array($job['STATUS'], [JobTable::STATUS_DONE, JobTable::STATUS_ERROR], true)) {
-            return self::toProgress($job);
-        }
-
-        // Другой тик (агент или второй опрос из браузера) уже работает с
-        // этим заданием — просто отдаём текущий прогресс, файл не трогаем.
-        if (!JobTable::tryLock($jobId, Options::getTickBudgetSeconds() * 4)) {
-            return self::toProgress($job);
-        }
-
-        try {
-            JobTable::update($jobId, ['STATUS' => JobTable::STATUS_RUNNING]);
-            $job['STATUS'] = JobTable::STATUS_RUNNING;
-
-            $deadline = microtime(true) + Options::getTickBudgetSeconds();
-
-            if ($job['ENTITY_TYPE'] === 'element') {
-                self::runElementExport($job);
-            } else {
-                self::runSectionExport($job, $job['MODE'] === 'section_tree', $deadline);
-            }
-
-            $job = JobTable::getJobById($jobId);
-        } catch (\Throwable $e) {
-            JobTable::update($jobId, [
-                'STATUS' => JobTable::STATUS_ERROR,
-                'ERROR_MESSAGE' => $e->getMessage(),
-                'DATE_FINISH' => new DateTime(),
-            ]);
-            self::logEvent('ERROR', $jobId, $e->getMessage());
-            $job = JobTable::getJobById($jobId);
-        } finally {
-            JobTable::unlock($jobId);
-        }
-
-        return self::toProgress($job);
+        return self::runner()->runStep($jobId);
     }
 
-    private static function toProgress(array $job): array
+    /** Общий движок тика (блокировка, агент, прогресс) — здесь только настройка под экспорт. */
+    private static function runner(): TickRunner
     {
-        $totalNodes = max(1, (int)$job['TOTAL_SECTIONS'] + (int)$job['TOTAL_ELEMENTS']);
-        $doneNodes = (int)$job['PROCESSED_SECTIONS'] + (int)$job['PROCESSED_ELEMENTS'];
-        $progress = $job['STATUS'] === JobTable::STATUS_DONE ? 100 : (int)min(99, round(100 * $doneNodes / $totalNodes));
+        return new TickRunner(
+            JobTable::class,
+            self::class,
+            'VSPACE_IBEXPORT_',
+            'Задание экспорта не найдено.',
+            self::processTick(...),
+            static fn(array $job): array => [
+                'archive_file' => $job['ARCHIVE_FILE'],
+                'archive_size' => (int)$job['ARCHIVE_SIZE'],
+            ]
+        );
+    }
 
-        return [
-            'id' => (int)$job['ID'],
-            'status' => $job['STATUS'],
-            'stage' => $job['STAGE'],
-            'progress' => $progress,
-            'processed_sections' => (int)$job['PROCESSED_SECTIONS'],
-            'processed_elements' => (int)$job['PROCESSED_ELEMENTS'],
-            'total_sections' => (int)$job['TOTAL_SECTIONS'],
-            'total_elements' => (int)$job['TOTAL_ELEMENTS'],
-            'error_message' => $job['ERROR_MESSAGE'],
-            'archive_file' => $job['ARCHIVE_FILE'],
-            'archive_size' => (int)$job['ARCHIVE_SIZE'],
-        ];
+    /** Специфичная для экспорта часть одного тика: выбор режима (элемент / раздел). */
+    private static function processTick(array $job, float $deadline): void
+    {
+        if ($job['ENTITY_TYPE'] === 'element') {
+            self::runElementExport($job);
+        } else {
+            self::runSectionExport($job, $job['MODE'] === 'section_tree', $deadline);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -514,7 +449,7 @@ class Exporter
     {
         $el = CIBlockElement::GetByID($elementId)->GetNext();
         if (!$el) {
-            self::addWarning($jobId, 'Элемент #' . $elementId . ' не найден, пропущен.');
+            JobTable::addWarning($jobId, 'Элемент #' . $elementId . ' не найден, пропущен.');
             return;
         }
 
@@ -628,7 +563,7 @@ class Exporter
         $fileArr = CFile::GetFileArray($fileId);
         if (!$fileArr || empty($fileArr['SRC'])) {
             $w->openTag($tag, ['missing' => 'Y', 'file_id' => $fileId], true);
-            self::addWarning($jobId, 'Файл #' . $fileId . ' не найден, пропущен.');
+            JobTable::addWarning($jobId, 'Файл #' . $fileId . ' не найден, пропущен.');
             return;
         }
 
@@ -656,19 +591,11 @@ class Exporter
                     throw new \Exception('исходный файл отсутствует на диске');
                 }
             } catch (\Throwable $e) {
-                self::addWarning($jobId, 'Не удалось скопировать файл #' . $fileId . ' (' . $fileArr['FILE_NAME'] . '): ' . $e->getMessage());
+                JobTable::addWarning($jobId, 'Не удалось скопировать файл #' . $fileId . ' (' . $fileArr['FILE_NAME'] . '): ' . $e->getMessage());
             }
         }
 
         $w->openTag($tag, $attrs, true);
-    }
-
-    private static function addWarning(int $jobId, string $message): void
-    {
-        $job = JobTable::getJobById($jobId);
-        $warnings = $job['WARNINGS_JSON'] ? json_decode($job['WARNINGS_JSON'], true) : [];
-        $warnings[] = $message;
-        JobTable::update($jobId, ['WARNINGS_JSON' => json_encode($warnings, JSON_UNESCAPED_UNICODE)]);
     }
 
     // ---------------------------------------------------------------
@@ -711,7 +638,7 @@ class Exporter
             'DATE_EXPIRE' => DateTime::createFromTimestamp(time() + $ttl * 3600),
         ]);
 
-        self::logEvent('DONE', $jobId, '');
+        self::runner()->logEvent('DONE', $jobId, '');
     }
 
     /**
@@ -784,17 +711,6 @@ class Exporter
         if (!is_dir($dir . '/files')) {
             mkdir($dir . '/files', 0755, true);
         }
-    }
-
-    private static function logEvent(string $type, int $jobId, string $message): void
-    {
-        \CEventLog::Add([
-            'SEVERITY' => $type === 'ERROR' ? 'ERROR' : 'INFO',
-            'AUDIT_TYPE_ID' => 'VSPACE_IBEXPORT_' . $type,
-            'MODULE_ID' => 'vspace.ibexport',
-            'ITEM_ID' => $jobId,
-            'DESCRIPTION' => $message,
-        ]);
     }
 
     /** Постоянный агент CAgent: удаляет просроченные каталоги и записи заданий (раздел 8). */

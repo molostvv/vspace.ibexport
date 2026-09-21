@@ -192,112 +192,52 @@ class Importer
         ])->getId();
 
         if (($counts['sections'] + $counts['elements']) > Options::getSyncThreshold()) {
-            self::scheduleAgent($id);
+            self::runner()->scheduleAgent($id);
         }
 
         return $id;
     }
 
-    private static function scheduleAgent(int $jobId): void
+    /** Колбэк CAgent для одного задания. Возвращает себя же для перепланирования, либо '' при завершении. */
+    public static function agentTick(int $jobId): string
     {
-        $call = '\\Vspace\\Ibexport\\Importer::agentTick(' . $jobId . ');';
-        \CAgent::AddAgent(
-            $call,
-            'vspace.ibexport',
-            'N',
-            5,
-            '',
-            'Y',
-            DateTime::createFromTimestamp(time())->toString()
+        return self::runner()->agentTick($jobId);
+    }
+
+    /** Один ограниченный по времени тик импорта — общий движок см. в TickRunner. */
+    public static function runStep(int $jobId): array
+    {
+        return self::runner()->runStep($jobId);
+    }
+
+    /** Общий движок тика (блокировка, агент, прогресс) — здесь только настройка под импорт. */
+    private static function runner(): TickRunner
+    {
+        return new TickRunner(
+            ImportJobTable::class,
+            self::class,
+            'VSPACE_IBIMPORT_',
+            'Задание импорта не найдено.',
+            self::processTick(...),
+            static fn(array $job): array => [
+                'created_count' => (int)$job['CREATED_COUNT'],
+                'updated_count' => (int)$job['UPDATED_COUNT'],
+                'skipped_count' => (int)$job['SKIPPED_COUNT'],
+            ]
         );
     }
 
-    public static function agentTick(int $jobId): string
+    /** Специфичная для импорта часть одного тика: разбор export.xml и выбор режима (элемент / раздел). */
+    private static function processTick(array $job, float $deadline): void
     {
-        $call = '\\Vspace\\Ibexport\\Importer::agentTick(' . $jobId . ');';
+        $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $job['TMP_DIR'];
+        $xml = simplexml_load_file($tmpDir . '/export.xml');
 
-        $job = ImportJobTable::getJobById($jobId);
-        if (!$job || in_array($job['STATUS'], [ImportJobTable::STATUS_DONE, ImportJobTable::STATUS_ERROR], true)) {
-            \CAgent::RemoveAgent($call, 'vspace.ibexport');
-            return '';
+        if ($job['MODE'] === 'element') {
+            self::runElementImport($job, $xml, $tmpDir);
+        } else {
+            self::runSectionImport($job, $xml, $tmpDir, $job['MODE'] === 'section_tree', $deadline);
         }
-
-        self::runStep($jobId);
-
-        $job = ImportJobTable::getJobById($jobId);
-        if (!$job || in_array($job['STATUS'], [ImportJobTable::STATUS_DONE, ImportJobTable::STATUS_ERROR], true)) {
-            \CAgent::RemoveAgent($call, 'vspace.ibexport');
-            return '';
-        }
-
-        return $call;
-    }
-
-    public static function runStep(int $jobId): array
-    {
-        $job = ImportJobTable::getJobById($jobId);
-        if (!$job) {
-            throw new \Exception('Задание импорта не найдено.');
-        }
-
-        if (in_array($job['STATUS'], [ImportJobTable::STATUS_DONE, ImportJobTable::STATUS_ERROR], true)) {
-            return self::toProgress($job);
-        }
-
-        if (!ImportJobTable::tryLock($jobId, Options::getTickBudgetSeconds() * 4)) {
-            return self::toProgress($job);
-        }
-
-        try {
-            ImportJobTable::update($jobId, ['STATUS' => ImportJobTable::STATUS_RUNNING]);
-            $job['STATUS'] = ImportJobTable::STATUS_RUNNING;
-
-            $deadline = microtime(true) + Options::getTickBudgetSeconds();
-            $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $job['TMP_DIR'];
-            $xml = simplexml_load_file($tmpDir . '/export.xml');
-
-            if ($job['MODE'] === 'element') {
-                self::runElementImport($job, $xml, $tmpDir);
-            } else {
-                self::runSectionImport($job, $xml, $tmpDir, $job['MODE'] === 'section_tree', $deadline);
-            }
-
-            $job = ImportJobTable::getJobById($jobId);
-        } catch (\Throwable $e) {
-            ImportJobTable::update($jobId, [
-                'STATUS' => ImportJobTable::STATUS_ERROR,
-                'ERROR_MESSAGE' => $e->getMessage(),
-                'DATE_FINISH' => new DateTime(),
-            ]);
-            self::logEvent('ERROR', $jobId, $e->getMessage());
-            $job = ImportJobTable::getJobById($jobId);
-        } finally {
-            ImportJobTable::unlock($jobId);
-        }
-
-        return self::toProgress($job);
-    }
-
-    private static function toProgress(array $job): array
-    {
-        $totalNodes = max(1, (int)$job['TOTAL_SECTIONS'] + (int)$job['TOTAL_ELEMENTS']);
-        $doneNodes = (int)$job['PROCESSED_SECTIONS'] + (int)$job['PROCESSED_ELEMENTS'];
-        $progress = $job['STATUS'] === ImportJobTable::STATUS_DONE ? 100 : (int)min(99, round(100 * $doneNodes / $totalNodes));
-
-        return [
-            'id' => (int)$job['ID'],
-            'status' => $job['STATUS'],
-            'stage' => $job['STAGE'],
-            'progress' => $progress,
-            'processed_sections' => (int)$job['PROCESSED_SECTIONS'],
-            'processed_elements' => (int)$job['PROCESSED_ELEMENTS'],
-            'total_sections' => (int)$job['TOTAL_SECTIONS'],
-            'total_elements' => (int)$job['TOTAL_ELEMENTS'],
-            'created_count' => (int)$job['CREATED_COUNT'],
-            'updated_count' => (int)$job['UPDATED_COUNT'],
-            'skipped_count' => (int)$job['SKIPPED_COUNT'],
-            'error_message' => $job['ERROR_MESSAGE'],
-        ];
     }
 
     // ---------------------------------------------------------------
@@ -316,7 +256,7 @@ class Importer
         self::importElementNode($xml->element, $iblockId, null, $updateByCode, $tmpDir, $counts, $warnings, true);
 
         foreach ($warnings as $w) {
-            self::addWarning($jobId, $w);
+            ImportJobTable::addWarning($jobId, $w);
         }
 
         ImportJobTable::update($jobId, [
@@ -389,7 +329,7 @@ class Importer
         }
 
         foreach ($warnings as $w) {
-            self::addWarning($jobId, $w);
+            ImportJobTable::addWarning($jobId, $w);
         }
 
         ImportJobTable::update($jobId, [
@@ -728,14 +668,6 @@ class Importer
         return $map;
     }
 
-    private static function addWarning(int $jobId, string $message): void
-    {
-        $job = ImportJobTable::getJobById($jobId);
-        $warnings = $job['WARNINGS_JSON'] ? json_decode($job['WARNINGS_JSON'], true) : [];
-        $warnings[] = $message;
-        ImportJobTable::update($jobId, ['WARNINGS_JSON' => json_encode($warnings, JSON_UNESCAPED_UNICODE)]);
-    }
-
     // ---------------------------------------------------------------
     // финализация / временные файлы / журнал
     // ---------------------------------------------------------------
@@ -751,18 +683,7 @@ class Importer
             'DATE_EXPIRE' => DateTime::createFromTimestamp(time() + $ttl * 3600),
         ]);
 
-        self::logEvent('DONE', $jobId, '');
-    }
-
-    private static function logEvent(string $type, int $jobId, string $message): void
-    {
-        \CEventLog::Add([
-            'SEVERITY' => $type === 'ERROR' ? 'ERROR' : 'INFO',
-            'AUDIT_TYPE_ID' => 'VSPACE_IBIMPORT_' . $type,
-            'MODULE_ID' => 'vspace.ibexport',
-            'ITEM_ID' => $jobId,
-            'DESCRIPTION' => $message,
-        ]);
+        self::runner()->logEvent('DONE', $jobId, '');
     }
 
     /** Постоянный агент CAgent: удаляет просроченные каталоги и записи заданий импорта, включая "провалидированные, но не запущенные" (без задания). */

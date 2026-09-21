@@ -167,8 +167,10 @@ class vspace_ibexport extends CModule
         Loader::registerAutoLoadClasses($this->MODULE_ID, [
             'Vspace\\Ibexport\\Exporter' => 'lib/Exporter.php',
             'Vspace\\Ibexport\\Importer' => 'lib/Importer.php',
+            'Vspace\\Ibexport\\AbstractJobTable' => 'lib/AbstractJobTable.php',
             'Vspace\\Ibexport\\JobTable' => 'lib/JobTable.php',
             'Vspace\\Ibexport\\ImportJobTable' => 'lib/ImportJobTable.php',
+            'Vspace\\Ibexport\\TickRunner' => 'lib/TickRunner.php',
             'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',
