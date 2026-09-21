@@ -19,10 +19,16 @@ use Vspace\Ibexport\WalkResult;
  */
 final class SectionTreeWalker
 {
+    /** @var \Closure(): float */
+    private \Closure $clock;
+
+    /** @param (\Closure(): float)|null $clock Источник времени для сверки с крайним сроком; по умолчанию microtime(true) (подмена — для тестов) */
     public function __construct(
         private SectionImporter $sections,
-        private ElementImporter $elements
+        private ElementImporter $elements,
+        ?\Closure $clock = null
     ) {
+        $this->clock = $clock ?? static fn(): float => microtime(true);
     }
 
     /** @return ImportFrame[] Начальный стек обхода — один кадр корневого <section> (пустой путь) */
@@ -50,7 +56,7 @@ final class SectionTreeWalker
         $processedSections = 0;
         $processedElements = 0;
 
-        while (!empty($stack) && microtime(true) < $deadline) {
+        while (!empty($stack) && ($this->clock)() < $deadline) {
             $i = count($stack) - 1;
             $frame = $stack[$i];
             $node = self::nodeByPath($rootSection, $frame->path);

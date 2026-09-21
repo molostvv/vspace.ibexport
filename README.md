@@ -121,13 +121,28 @@
 
 ## Тесты
 
-Юнит-тесты (PHPUnit, 23 теста) покрывают чистую логику
-`YandexDisk\Client` (сборка URL, разбор ответов API, обработка ошибок,
-лимит размера файла) с поддельным HTTP-транспортом, а также разбор
-HTTP-редиректов в `YandexDisk\Http\BitrixHttpTransport::resolveRedirectUrl()`
-(в т.ч. protocol-relative `Location`, из-за которого аплоадер
-Яндекс.Диска ломал загрузку до исправления) — без сети и без поднятия
-ядра Bitrix:
+Юнит-тесты (PHPUnit, 83 теста) работают без сети и без поднятия ядра
+Bitrix — за счёт тонких интерфейсов на границе с Bitrix API (образец —
+`YandexDisk\Http\TransportInterface`) и поддельных реализаций в `tests/`:
+
+- `YandexDisk\Client` — сборка URL, разбор ответов API, обработка ошибок,
+  лимит размера файла (поддельный HTTP-транспорт); разбор HTTP-редиректов
+  в `YandexDisk\Http\BitrixHttpTransport::resolveRedirectUrl()`.
+- `TraversalFrame` (`ExportFrame`/`ImportFrame`) — round-trip
+  `toArray()`/`fromArray()`, порядок ключей, чтение `STATE_JSON`, записанного
+  до рефакторинга.
+- `Export\SectionTreeWalker` — переходы между фазами, постраничное чтение
+  элементов, `section_single`, возобновление после разрыва на каждом шаге
+  (поддельные `TreeSourceInterface` и писатели, часы подменены счётчиком).
+- `Import\SectionTreeWalker` — то же для импорта на настоящем SimpleXML
+  (поддельные импортёры).
+- `Import\PropertyResolver` — типы `L`/`F`/текстовые, нет определения
+  свойства, нет варианта списка, нет файла в архиве
+  (`PropertySourceInterface`, `FileArrayFactoryInterface`).
+- `Import\ImportReport` — счётчики и предупреждения.
+
+Общий движок тика (`TickRunner`), таблицы заданий и страницы админки
+требуют ядра Bitrix и юнит-тестами не покрыты. Запуск:
 
 ```bash
 composer install

@@ -19,11 +19,17 @@ use Vspace\Ibexport\XmlStreamWriter;
  */
 final class SectionTreeWalker
 {
+    /** @var \Closure(): float */
+    private \Closure $clock;
+
+    /** @param (\Closure(): float)|null $clock Источник времени для сверки с крайним сроком; по умолчанию microtime(true) (подмена — для тестов) */
     public function __construct(
         private TreeSourceInterface $source,
         private SectionWriter $sections,
-        private ElementWriter $elements
+        private ElementWriter $elements,
+        ?\Closure $clock = null
     ) {
+        $this->clock = $clock ?? static fn(): float => microtime(true);
     }
 
     /** @return ExportFrame[] Начальный стек обхода — один кадр корневого раздела */
@@ -42,7 +48,7 @@ final class SectionTreeWalker
         $processedSections = 0;
         $processedElements = 0;
 
-        while (!empty($stack) && microtime(true) < $deadline) {
+        while (!empty($stack) && ($this->clock)() < $deadline) {
             $frame = $stack[count($stack) - 1];
 
             if (!$frame->opened) {
