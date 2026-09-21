@@ -3,7 +3,9 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\Exporter;
+use Vspace\Ibexport\IblockListProvider;
 use Vspace\Ibexport\Importer;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
@@ -17,6 +19,7 @@ Loader::includeModule('iblock');
 IncludeModuleLangFile(__FILE__);
 
 $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
+$APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
 global $USER, $APPLICATION;
 
@@ -35,13 +38,7 @@ $step = $_REQUEST['STEP'] ?? '';
 $updateByCode = $step !== '' ? (($_REQUEST['UPDATE_BY_CODE'] ?? '') === 'Y') : Options::getDefaultUpdateByCode();
 
 // Инфоблоки, в которые текущий пользователь может импортировать данные.
-$iblocksList = [];
-$ibRes = \CIBlock::GetList(['SORT' => 'ASC'], ['ACTIVE' => 'Y']);
-while ($ib = $ibRes->Fetch()) {
-    if (Rights::canImport((int)$ib['ID'])) {
-        $iblocksList[] = $ib;
-    }
-}
+$iblocksList = IblockListProvider::getAvailable(Rights::canImport(...));
 
 if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
     try {
@@ -105,48 +102,13 @@ if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
-if ($errors) {
-    CAdminMessage::ShowMessage(['TYPE' => 'ERROR', 'MESSAGE' => implode('<br>', array_map('htmlspecialcharsbx', $errors))]);
-}
+AdminMessages::showErrors($errors);
 
 // Стандартная детальная форма админки Bitrix, как и на странице экспорта.
 $tabControl = new CAdminTabControl('tabControl', [
     ['DIV' => 'edit1', 'TAB' => GetMessage('IBIMPORT_FORM_HEADING'), 'TITLE' => GetMessage('IBIMPORT_FORM_HEADING')],
 ]);
 ?>
-
-<style>
-    /* Общий "нейтральный" блок примечания (оценка архива, пустой список
-       Диска) — объявлен один раз для всей страницы, а не только когда
-       есть результат "Проверить архив", иначе на пустом "Проверить Диск"
-       класс использовался бы без единого правила CSS для него на странице. */
-    .vibx-note {
-        display: flex;
-        align-items: center;
-        box-sizing: border-box;
-        margin-top: 15px;
-        padding: 12px 16px;
-        background: #f5f6f7;
-        border: 1px solid #d5dbe0;
-        border-radius: 3px;
-        color: #2b3446;
-        font-size: 13px;
-        line-height: 1.4;
-    }
-    .vibx-list-heading {
-        margin-top: 15px;
-        margin-bottom: 6px;
-        font-size: 13px;
-        font-weight: bold;
-        color: #2b3446;
-    }
-    /* Кнопка "Импортировать" делает свою ячейку выше, чем текстовые
-       ячейки той же строки — без явного vertical-align текст в них
-       остаётся прижат к верху, а не к середине выросшей строки. */
-    .vibx-disk-list-table .adm-list-table-cell {
-        vertical-align: middle;
-    }
-</style>
 
 <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_import_form" enctype="multipart/form-data">
     <?php $tabControl->Begin(); ?>

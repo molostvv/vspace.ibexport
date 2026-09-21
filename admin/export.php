@@ -3,7 +3,9 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\Exporter;
+use Vspace\Ibexport\IblockListProvider;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
 
@@ -13,6 +15,7 @@ Loader::includeModule('iblock');
 IncludeModuleLangFile(__FILE__);
 
 $APPLICATION->SetTitle(GetMessage('IBEXPORT_EXPORT_TITLE'));
+$APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
 global $USER, $APPLICATION;
 
@@ -31,13 +34,7 @@ $withFiles = $step !== '' ? (($_REQUEST['WITH_FILES'] ?? '') === 'Y') : Options:
 $activeOnly = $step !== '' ? (($_REQUEST['ACTIVE_ONLY'] ?? '') === 'Y') : Options::getDefaultActiveOnly();
 
 // Инфоблоки, из которых текущий пользователь может выгружать данные (раздел 10 ТЗ).
-$iblocksList = [];
-$ibRes = \CIBlock::GetList(['SORT' => 'ASC'], ['ACTIVE' => 'Y']);
-while ($ib = $ibRes->Fetch()) {
-    if (Rights::canExport((int)$ib['ID'])) {
-        $iblocksList[] = $ib;
-    }
-}
+$iblocksList = IblockListProvider::getAvailable(Rights::canExport(...));
 
 if ($step === 'estimate' || $step === 'run') {
     try {
@@ -89,9 +86,7 @@ if ($step === 'estimate' || $step === 'run') {
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
-if ($errors) {
-    CAdminMessage::ShowMessage(['TYPE' => 'ERROR', 'MESSAGE' => implode('<br>', array_map('htmlspecialcharsbx', $errors))]);
-}
+AdminMessages::showErrors($errors);
 
 // Стандартная детальная форма админки Bitrix (тот же движок, что рисует
 // формы редактирования элементов/разделов) — вместо голой <table> без рамки
@@ -176,21 +171,6 @@ $tabControl = new CAdminTabControl('tabControl', [
             '#ELEMENTS#' => $estimate['elements'],
         ]) ?>
     </div>
-    <style>
-        .vibx-note {
-            display: flex;
-            align-items: center;
-            box-sizing: border-box;
-            margin-top: 15px;
-            padding: 12px 16px;
-            background: #f5f6f7;
-            border: 1px solid #d5dbe0;
-            border-radius: 3px;
-            color: #2b3446;
-            font-size: 13px;
-            line-height: 1.4;
-        }
-    </style>
 <?php endif; ?>
 
 <?php

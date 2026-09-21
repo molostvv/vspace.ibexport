@@ -3,6 +3,7 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\YandexDisk\Client;
 use Vspace\Ibexport\YandexDisk\Exception;
@@ -23,6 +24,7 @@ if (!$USER->IsAdmin()) {
 }
 
 $APPLICATION->SetTitle(GetMessage('IBYADISK_TITLE'));
+$APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
 $errors = [];
 $notice = '';
@@ -53,9 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
 if ($errors) {
-    CAdminMessage::ShowMessage(['TYPE' => 'ERROR', 'MESSAGE' => implode('<br>', array_map('htmlspecialcharsbx', $errors))]);
+    AdminMessages::showErrors($errors);
 } elseif ($notice !== '') {
-    CAdminMessage::ShowMessage(['TYPE' => 'OK', 'MESSAGE' => htmlspecialcharsbx($notice)]);
+    AdminMessages::showNotice($notice);
 }
 
 // Статус подключения — синхронная проверка при каждом открытии страницы
@@ -68,19 +70,13 @@ if (Settings::hasToken()) {
         $status = $client->checkConnection();
         $freeGb = round($status['free_space'] / 1073741824, 1);
         $totalGb = round($status['total_space'] / 1073741824, 1);
-        $statusHtml = '<div class="adm-info-message-wrap adm-info-message-green"><div class="adm-info-message">'
-            . '<div class="adm-info-message-title">' . htmlspecialcharsbx(GetMessage('IBYADISK_STATUS_CONNECTED', [
-                '#LOGIN#' => $status['user_login'],
-                '#FREE#' => $freeGb,
-                '#TOTAL#' => $totalGb,
-            ])) . '</div>'
-            . '<div class="adm-info-message-icon"></div>'
-            . '</div></div>';
+        $statusHtml = AdminMessages::ok(GetMessage('IBYADISK_STATUS_CONNECTED', [
+            '#LOGIN#' => $status['user_login'],
+            '#FREE#' => $freeGb,
+            '#TOTAL#' => $totalGb,
+        ]));
     } catch (Exception $e) {
-        $statusHtml = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
-            . '<div class="adm-info-message-title">' . htmlspecialcharsbx(GetMessage('IBYADISK_STATUS_ERROR', ['#MESSAGE#' => $e->getMessage()])) . '</div>'
-            . '<div class="adm-info-message-icon"></div>'
-            . '</div></div>';
+        $statusHtml = AdminMessages::error(GetMessage('IBYADISK_STATUS_ERROR', ['#MESSAGE#' => $e->getMessage()]));
     }
 } else {
     $statusHtml = '<div class="vibx-note">' . htmlspecialcharsbx(GetMessage('IBYADISK_STATUS_NOT_CONNECTED')) . '</div>';
@@ -92,21 +88,6 @@ $tabControl = new CAdminTabControl('tabControl', [
 ?>
 
 <?= $statusHtml ?>
-<style>
-    .vibx-note {
-        display: flex;
-        align-items: center;
-        box-sizing: border-box;
-        margin-top: 15px;
-        padding: 12px 16px;
-        background: #f5f6f7;
-        border: 1px solid #d5dbe0;
-        border-radius: 3px;
-        color: #2b3446;
-        font-size: 13px;
-        line-height: 1.4;
-    }
-</style>
 
 <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_yandex_disk_form">
     <?php $tabControl->Begin(); ?>

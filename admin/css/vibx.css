@@ -1,0 +1,44 @@
+/*
+ * Общие стили страниц модуля vspace.ibexport в админке. Подключается один раз
+ * штатным $APPLICATION->SetAdditionalCSS() на страницах экспорта, импорта и
+ * подключения Яндекс.Диска — вместо инлайнового <style> на каждой из них.
+ */
+
+/*
+ * Нейтральный (не success/error) блок примечания: результат оценки объёма,
+ * оценка архива, пустой список Диска, статус "Диск не подключён". Ядро
+ * нейтральных типов сообщений не предоставляет: "-gray" без парного
+ * "adm-info-message-icon" в этой теме не имеет собственных отступов и
+ * выравнивания.
+ */
+.vibx-note {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    margin-top: 15px;
+    padding: 12px 16px;
+    background: #f5f6f7;
+    border: 1px solid #d5dbe0;
+    border-radius: 3px;
+    color: #2b3446;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Заголовок над списком файлов на Яндекс.Диске (страница импорта). */
+.vibx-list-heading {
+    margin-top: 15px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #2b3446;
+}
+
+/*
+ * Кнопка "Импортировать" делает свою ячейку выше, чем текстовые ячейки той
+ * же строки — без явного vertical-align текст в них остаётся прижат к верху,
+ * а не к середине выросшей строки.
+ */
+.vibx-disk-list-table .adm-list-table-cell {
+    vertical-align: middle;
+}

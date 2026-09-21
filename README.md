@@ -105,7 +105,13 @@
   `HttpClient`), `Settings.php` (токен/папка обмена), `ImportSource.php`
   (источник импорта "с Диска"), `Http/` (транспорт клиента), см.
   [docs/yandex-disk.md](docs/yandex-disk.md).
+- `lib/IblockListProvider.php` — список инфоблоков, доступных
+  пользователю (`CIBlock::GetList` + проверка права колбэком), общий для
+  страниц экспорта и импорта. `lib/Admin/AdminMessages.php` — единый вывод
+  сообщений админки через штатный `CAdminMessage`.
 - `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`).
+  `admin/css/vibx.css` — общие стили страниц модуля (`.vibx-note` и др.),
+  подключаются штатным `$APPLICATION->SetAdditionalCSS()`.
 
 ## Тесты
 

@@ -3,6 +3,7 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\ImportJobTable;
 use Vspace\Ibexport\Importer;
 
@@ -49,29 +50,20 @@ $statusLabels = [
     ImportJobTable::STATUS_ERROR => GetMessage('IBIMPORT_STATUS_ERROR'),
 ];
 
-// Тот же расчёт процента, что и в Importer::toProgress() — см. progress.php.
-$totalNodes = max(1, (int)$job['TOTAL_SECTIONS'] + (int)$job['TOTAL_ELEMENTS']);
-$doneNodes = (int)$job['PROCESSED_SECTIONS'] + (int)$job['PROCESSED_ELEMENTS'];
-$initialProgress = $job['STATUS'] === ImportJobTable::STATUS_DONE ? 100 : (int)min(99, round(100 * $doneNodes / $totalNodes));
+// Тот же расчёт процента, что и в AJAX-ответе (TickRunner::toProgress()) — см. progress.php.
+$initialProgress = ImportJobTable::calculateProgress($job);
 
 // Пре-рендер итогового блока для уже завершённого/упавшего задания — та же
 // разметка, что и в progress.js (см. также admin/progress.php).
 $messageHtml = '';
 if ($job['STATUS'] === ImportJobTable::STATUS_DONE) {
-    $doneText = htmlspecialcharsbx(GetMessage('IBIMPORT_PROGRESS_DONE')) . ' ' . htmlspecialcharsbx(GetMessage('IBIMPORT_SUMMARY', [
+    $messageHtml = AdminMessages::ok(GetMessage('IBIMPORT_PROGRESS_DONE') . ' ' . GetMessage('IBIMPORT_SUMMARY', [
         '#CREATED#' => (int)$job['CREATED_COUNT'],
         '#UPDATED#' => (int)$job['UPDATED_COUNT'],
         '#SKIPPED#' => (int)$job['SKIPPED_COUNT'],
     ]));
-    $messageHtml = '<div class="adm-info-message-wrap adm-info-message-green"><div class="adm-info-message">'
-        . '<div class="adm-info-message-title">' . $doneText . '</div>'
-        . '<div class="adm-info-message-icon"></div>'
-        . '</div></div>';
 } elseif ($job['STATUS'] === ImportJobTable::STATUS_ERROR) {
-    $messageHtml = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
-        . '<div class="adm-info-message-title">' . htmlspecialcharsbx(GetMessage('IBIMPORT_PROGRESS_ERROR')) . ': ' . htmlspecialcharsbx((string)$job['ERROR_MESSAGE']) . '</div>'
-        . '<div class="adm-info-message-icon"></div>'
-        . '</div></div>';
+    $messageHtml = AdminMessages::error(GetMessage('IBIMPORT_PROGRESS_ERROR') . ': ' . (string)$job['ERROR_MESSAGE']);
 }
 
 $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js');
