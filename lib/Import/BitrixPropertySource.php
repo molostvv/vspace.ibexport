@@ -31,6 +31,19 @@ final class BitrixPropertySource implements PropertySourceInterface
         return $this->definitions[$iblockId] = $defs;
     }
 
+    /** @var array<int, string[]> */
+    private array $sectionUserFields = [];
+
+    public function getSectionUserFieldCodes(int $iblockId): array
+    {
+        if (!isset($this->sectionUserFields[$iblockId])) {
+            global $USER_FIELD_MANAGER;
+            $this->sectionUserFields[$iblockId] = array_keys($USER_FIELD_MANAGER->GetUserFields('IBLOCK_' . $iblockId . '_SECTION'));
+        }
+
+        return $this->sectionUserFields[$iblockId];
+    }
+
     public function getEnumMap(int $propertyId): array
     {
         if (isset($this->enumMaps[$propertyId])) {

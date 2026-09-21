@@ -14,6 +14,9 @@ interface PropertySourceInterface
     /** @return array<string, array{ID:int, MULTIPLE:string}> код свойства => метаданные, для данного инфоблока */
     public function getDefinitions(int $iblockId): array;
 
+    /** @return string[] коды пользовательских полей (UF_*) разделов данного инфоблока */
+    public function getSectionUserFieldCodes(int $iblockId): array;
+
     /** @return array<string, int> отображаемое значение варианта списка => ID варианта, для данного свойства */
     public function getEnumMap(int $propertyId): array;
 }

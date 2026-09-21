@@ -30,7 +30,13 @@ files/            — файлы (только если включена опц�
   <picture file_ref="files/301_cover.jpg" name="cover.jpg" size="12345" mime="image/jpeg"/>
   <properties>
     <property code="UF_SEO_TITLE">...</property>
+    <property code="UF_TAGS" multiple="true"><value>...</value><value>...</value></property>
   </properties>
+
+  <!-- <properties> — пользовательские поля раздела (UF_*): значение одиночного поля — текст узла, множественного — <value>
+       на каждое. Выгружаются только поля с самодостаточным значением: string, integer, double, boolean, date, datetime, url.
+       У файла, списка и привязки к элементу/разделу значение — ID записи этой инсталляции, поэтому такие поля не
+       выгружаются (в журнал выгрузки пишется предупреждение). -->
 
   <!-- только в mode=section_tree: реальные дочерние разделы, рекурсивно -->
   <sections>

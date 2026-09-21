@@ -29,7 +29,7 @@ final class ImportPageController
      * @return array{
      *     errors: string[],
      *     prepared: array|null,
-     *     preview: array{rows: array[], truncated: bool}|null,
+     *     preview: array{rows: array[], truncated: bool, missing_props: array<string, int>, missing_uf: array<string, int>}|null,
      *     diskFiles: array[]|null,
      *     iblocks: array[],
      *     iblockId: int,

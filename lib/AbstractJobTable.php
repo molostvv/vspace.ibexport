@@ -108,11 +108,11 @@ abstract class AbstractJobTable extends DataManager
         static::update($id, ['LOCKED_AT' => null]);
     }
 
-    public static function addWarning(int $jobId, string $message): void
+    /** Добавляет предупреждение; одинаковые объединяются с числом повторов, размер списка ограничен (см. WarningList). */
+    public static function addWarning(int $jobId, string $message, int $count = 1): void
     {
         $job = static::getJobById($jobId);
-        $warnings = $job['WARNINGS_JSON'] ? json_decode($job['WARNINGS_JSON'], true) : [];
-        $warnings[] = $message;
-        static::update($jobId, ['WARNINGS_JSON' => json_encode($warnings, JSON_UNESCAPED_UNICODE)]);
+        $warnings = WarningList::add(WarningList::decode($job['WARNINGS_JSON'] ?? null), $message, $count);
+        static::update($jobId, ['WARNINGS_JSON' => WarningList::encode($warnings)]);
     }
 }

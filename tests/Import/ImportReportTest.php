@@ -36,6 +36,18 @@ final class ImportReportTest extends TestCase
         $this->assertSame(['created' => 3, 'updated' => 0, 'skipped' => 0], ImportReport::withCounts(['created' => '3'])->toCounts());
     }
 
+    public function testIdenticalWarningsAreCountedOnce(): void
+    {
+        $report = new ImportReport();
+        $report->addWarning('missing X');
+        $report->addWarning('other');
+        $report->addWarning('missing X');
+        $report->addWarning('missing X');
+
+        $this->assertSame(['missing X', 'other'], $report->getWarnings());
+        $this->assertSame(['missing X' => 3, 'other' => 1], $report->getWarningCounts());
+    }
+
     public function testWarningsAreKeptInOrderAndNotPersistedInCounts(): void
     {
         $report = new ImportReport();

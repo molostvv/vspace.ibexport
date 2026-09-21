@@ -96,7 +96,7 @@ final class ExportStep
 
             $walker = new SectionTreeWalker(
                 new BitrixTreeSource(),
-                new SectionWriter($this->buildFileWriter($jobId, $ctx)),
+                new SectionWriter($this->buildFileWriter($jobId, $ctx), $this->warningSink($jobId)),
                 $this->buildElementWriter($jobId, $ctx)
             );
             $result = $walker->walk($w, $stack, $ctx, $recursive, $deadline);

@@ -214,6 +214,8 @@ class vspace_ibexport extends CModule
             'Vspace\\Ibexport\\Import\\ExistingRecordFinderInterface' => 'lib/Import/ExistingRecordFinderInterface.php',
             'Vspace\\Ibexport\\Import\\BitrixExistingRecordFinder' => 'lib/Import/BitrixExistingRecordFinder.php',
             'Vspace\\Ibexport\\Import\\ImportPreview' => 'lib/Import/ImportPreview.php',
+            'Vspace\\Ibexport\\Export\\UserFieldExport' => 'lib/Export/UserFieldExport.php',
+            'Vspace\\Ibexport\\WarningList' => 'lib/WarningList.php',
             'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',

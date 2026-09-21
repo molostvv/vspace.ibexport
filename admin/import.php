@@ -177,6 +177,10 @@ $tabControl = new CAdminTabControl('tabControl', [
                 $r['flags']
             ))) . '</span>';
         }
+        if ($r['missing']) {
+            // Не предупреждение о совпадении, а сведение: значения этих свойств/полей импорт пропустит.
+            $noteHtml .= ($noteHtml !== '' ? '<br>' : '') . htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_MISSING_NOTE', ['#CODES#' => implode(', ', $r['missing'])]));
+        }
         $row = &$previewList->AddRow($n + 1, $r);
         $row->AddViewField('KIND', htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_KIND_' . strtoupper($r['kind']))));
         $row->AddViewField('SRC_ID', (int)$r['src_id']);
@@ -198,6 +202,21 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php if ($suspicious > 0): ?>
         <?php AdminMessages::showErrors([GetMessage('IBIMPORT_PREVIEW_SUSPICIOUS', ['#COUNT#' => $suspicious])]); ?>
     <?php endif; ?>
+    <?php
+    // Свойства элементов и UF-поля разделов, которых нет в целевом инфоблоке (их значения импорт пропустит).
+    foreach (['missing_props' => 'IBIMPORT_PREVIEW_MISSING_PROPS', 'missing_uf' => 'IBIMPORT_PREVIEW_MISSING_UF'] as $missingKey => $missingMessage) {
+        if (!$preview[$missingKey]) {
+            continue;
+        }
+        $list = [];
+        foreach ($preview[$missingKey] as $missingCode => $missingCount) {
+            $list[] = $missingCode . ' (' . $missingCount . ')';
+        }
+        ?>
+        <div class="vibx-note"><?= htmlspecialcharsbx(GetMessage($missingMessage, ['#LIST#' => implode(', ', $list)])) ?><?= $preview['truncated'] ? ' ' . htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_MISSING_PARTIAL')) : '' ?></div>
+        <?php
+    }
+    ?>
     <div style="color:#888;font-size:11px;margin-bottom:6px;"><?= GetMessage('IBIMPORT_PREVIEW_HINT') ?></div>
     <?php if ($preview['truncated']): ?>
         <div class="vibx-note"><?= GetMessage('IBIMPORT_PREVIEW_TRUNCATED', ['#SHOWN#' => count($preview['rows']), '#TOTAL#' => (int)$prepared['sections'] + (int)$prepared['elements']]) ?></div>

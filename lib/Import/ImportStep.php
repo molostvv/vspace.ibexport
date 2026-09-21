@@ -70,9 +70,10 @@ final class ImportStep
         $stack = isset($state['stack']) ? ImportFrame::stackFromArray($state['stack']) : SectionTreeWalker::initialStack();
         $report = ImportReport::withCounts($state['counts'] ?? []);
 
+        $source = new BitrixPropertySource();
         $walker = new SectionTreeWalker(
-            new SectionImporter(new BitrixFileArrayFactory()),
-            $this->buildElementImporter()
+            new SectionImporter(new BitrixFileArrayFactory(), $source),
+            $this->buildElementImporter($source)
         );
         $result = $walker->walk($xml->section, $stack, $parentSectionId, $recursive, $ctx, $report, $deadline);
 
@@ -116,18 +117,18 @@ final class ImportStep
         return new ImportContext((int)$job['TARGET_IBLOCK_ID'], $job['UPDATE_BY_CODE'] === 'Y', $tmpDir, ($job['MATCH_BY_XML_ID'] ?? 'N') === 'Y');
     }
 
-    private function buildElementImporter(): ElementImporter
+    private function buildElementImporter(?BitrixPropertySource $source = null): ElementImporter
     {
         $files = new BitrixFileArrayFactory();
 
-        return new ElementImporter($files, new PropertyResolver(new BitrixPropertySource(), $files));
+        return new ElementImporter($files, new PropertyResolver($source ?? new BitrixPropertySource(), $files));
     }
 
     /** Предупреждения тика — в WARNINGS_JSON задания (в конце тика: при исключении посреди тика не сохраняются). */
     private function flushWarnings(int $jobId, ImportReport $report): void
     {
-        foreach ($report->getWarnings() as $warning) {
-            ImportJobTable::addWarning($jobId, $warning);
+        foreach ($report->getWarningCounts() as $warning => $count) {
+            ImportJobTable::addWarning($jobId, (string)$warning, $count);
         }
     }
 }

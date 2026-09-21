@@ -13,6 +13,11 @@ use SimpleXMLElement;
  */
 class SectionImporter extends AbstractNodeImporter
 {
+    public function __construct(FileArrayFactoryInterface $files, private PropertySourceInterface $source)
+    {
+        parent::__construct($files);
+    }
+
     /** @return int ID найденного/созданного/обновлённого раздела в целевом инфоблоке */
     public function import(SimpleXMLElement $node, ?int $parentId, ImportContext $ctx, ImportReport $report): int
     {
@@ -34,7 +39,7 @@ class SectionImporter extends AbstractNodeImporter
         }
 
         $this->applyFileField($fields, 'PICTURE', $node->picture, $ctx, $report);
-        $this->applyUserFields($fields, $node->properties);
+        $this->applyUserFields($fields, $node->properties, $iblockId, $report);
 
         $found = $this->findMatch(SectionTable::class, $iblockId, $match);
         $existingId = $found['id'];
@@ -71,16 +76,43 @@ class SectionImporter extends AbstractNodeImporter
         return (int)$newId;
     }
 
-    /** UF_* поля раздела экспортированы обычным текстом (см. Export\SectionWriter) — ставятся как есть. */
-    private function applyUserFields(array &$fields, SimpleXMLElement $properties): void
+    /**
+     * UF_*-поля раздела из <properties> (см. Export\SectionWriter): одиночное значение — текст узла,
+     * множественное — <value> на каждое.
+     *
+     * @return array<string, string|string[]> код поля => значение
+     */
+    public static function parseUserFields(SimpleXMLElement $properties): array
     {
-        if (!isset($properties->property)) {
-            return;
-        }
-        foreach ($properties->property as $prop) {
+        $result = [];
+        foreach ($properties->property ?? [] as $prop) {
             $code = (string)$prop['code'];
-            if (strpos($code, 'UF_') === 0) {
-                $fields[$code] = (string)$prop;
+            if (strpos($code, 'UF_') !== 0) {
+                continue;
+            }
+            if (count($prop->value) > 0) {
+                $values = [];
+                foreach ($prop->value as $value) {
+                    $values[] = (string)$value;
+                }
+                $result[$code] = $values;
+            } else {
+                $result[$code] = (string)$prop;
+            }
+        }
+
+        return $result;
+    }
+
+    /** Поля, которых нет в целевом инфоблоке, пропускаются с предупреждением (Bitrix проигнорировал бы их молча). */
+    private function applyUserFields(array &$fields, SimpleXMLElement $properties, int $iblockId, ImportReport $report): void
+    {
+        $known = $this->source->getSectionUserFieldCodes($iblockId);
+        foreach (self::parseUserFields($properties) as $code => $value) {
+            if (in_array($code, $known, true)) {
+                $fields[$code] = $value;
+            } else {
+                $report->addWarning('Поле раздела "' . $code . '" не найдено в целевом инфоблоке, значение пропущено.');
             }
         }
     }

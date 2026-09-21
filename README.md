@@ -83,7 +83,7 @@
   тик-бюджетный DFS-обход дерева разделов), `SectionWriter` /
   `ElementWriter` / `FileRefWriter` (XML-узлы), `ArchiveBuilder` (ZIP),
   `TreeSourceInterface` + `BitrixTreeSource` (источник дерева — граница
-  для тестов), `ExportContext`.
+  для тестов), `UserFieldExport` (правила выгрузки `UF_*` разделов), `ExportContext`.
 - `lib/Import/` — импорт: `ImportStep` (один тик), `SectionTreeWalker`
   (зеркальный обход по распакованному XML), `SectionImporter` /
   `ElementImporter` (создание/обновление записи), `PropertyResolver`
@@ -125,7 +125,7 @@
 
 ## Тесты
 
-Юнит-тесты (PHPUnit, 100 тестов) работают без сети и без поднятия ядра
+Юнит-тесты (PHPUnit, 123 теста) работают без сети и без поднятия ядра
 Bitrix — за счёт тонких интерфейсов на границе с Bitrix API (образец —
 `YandexDisk\Http\TransportInterface`) и поддельных реализаций в `tests/`:
 
@@ -143,7 +143,9 @@ Bitrix — за счёт тонких интерфейсов на границе
 - `Import\PropertyResolver` — типы `L`/`F`/текстовые, нет определения
   свойства, нет варианта списка, нет файла в архиве
   (`PropertySourceInterface`, `FileArrayFactoryInterface`).
-- `Import\ImportReport` — счётчики и предупреждения.
+- `Import\ImportReport` — счётчики и предупреждения (одинаковые считаются один раз).
+- `WarningList` — объединение одинаковых предупреждений задания и лимит размера `WARNINGS_JSON`.
+- `Export\UserFieldExport` — какие `UF_*`-поля раздела и как выгружаются; `Import\SectionImporter::parseUserFields()` — их разбор при импорте.
 - `Import\ImportPreview` — порядок строк, контекст раздела, счётчики файлов и
   свойств, выбор ключа сопоставления и действия, предупреждения (другое
   название, неоднозначный XML_ID), усечение по лимиту

@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use SimpleXMLElement;
 use Vspace\Ibexport\Import\BitrixExistingRecordFinder;
+use Vspace\Ibexport\Import\BitrixPropertySource;
 use Vspace\Ibexport\Import\ImportContext;
 use Vspace\Ibexport\Import\ImportPreview;
 use Vspace\Ibexport\Import\ImportStep;
@@ -141,14 +142,14 @@ class Importer
      * Что будет сделано при импорте уже принятого архива (Import\ImportPreview): записи из export.xml
      * с ключами сопоставления и ожидаемым действием при заданных опциях.
      *
-     * @return array{rows: array[], truncated: bool}
+     * @return array{rows: array[], truncated: bool, missing_props: array<string, int>, missing_uf: array<string, int>}
      */
     public static function preview(string $tmpDirName, int $iblockId, bool $updateByCode, bool $matchByXmlId): array
     {
         $tmpDir = self::resolveTmpDir($tmpDirName);
         $xml = simplexml_load_file($tmpDir . '/export.xml');
 
-        return (new ImportPreview(new BitrixExistingRecordFinder()))
+        return (new ImportPreview(new BitrixExistingRecordFinder(), new BitrixPropertySource()))
             ->build($xml, (string)$xml['mode'], new ImportContext($iblockId, $updateByCode, $tmpDir, $matchByXmlId));
     }
 

@@ -6,6 +6,7 @@ use PHPUnit\Framework\TestCase;
 use SimpleXMLElement;
 use Vspace\Ibexport\Import\ImportContext;
 use Vspace\Ibexport\Import\ImportPreview;
+use Vspace\Ibexport\Tests\Import\Fake\FakePropertySource;
 use Vspace\Ibexport\Tests\Import\Fake\FakeRecordFinder;
 
 final class ImportPreviewTest extends TestCase
@@ -43,9 +44,11 @@ XML;
         return new ImportContext(8, $update, '/tmp', $xml);
     }
 
-    private function build(string $xml, string $mode, ImportContext $ctx, FakeRecordFinder $finder, int $limit = 200): array
+    private function build(string $xml, string $mode, ImportContext $ctx, FakeRecordFinder $finder, int $limit = 200, ?FakePropertySource $properties = null): array
     {
-        return (new ImportPreview($finder))->build(new SimpleXMLElement($xml), $mode, $ctx, $limit);
+        $properties ??= new FakePropertySource([8 => ['A' => ['ID' => 1, 'MULTIPLE' => 'N'], 'B' => ['ID' => 2, 'MULTIPLE' => 'N']]]);
+
+        return (new ImportPreview($finder, $properties))->build(new SimpleXMLElement($xml), $mode, $ctx, $limit);
     }
 
     public function testRowsFollowImportOrderWithContext(): void
@@ -145,6 +148,38 @@ XML;
 
         $this->assertSame([], $rows[1]['flags']);
         $this->assertSame('update', $rows[1]['action']);
+    }
+
+    public function testCollectsElementPropertiesMissingInTargetIblock(): void
+    {
+        $properties = new FakePropertySource([8 => ['A' => ['ID' => 1, 'MULTIPLE' => 'N']]]); // свойства B в целевом инфоблоке нет
+        $result = $this->build(self::TREE, 'section_tree', $this->ctx(true, false), new FakeRecordFinder(), 200, $properties);
+
+        $this->assertSame(['B'], $result['rows'][1]['missing']);
+        $this->assertSame([], $result['rows'][0]['missing'], 'у раздела свойств нет');
+        $this->assertSame(['B' => 1], $result['missing_props']);
+        $this->assertSame([], $result['missing_uf']);
+    }
+
+    public function testNothingIsMissingWhenTargetHasAllProperties(): void
+    {
+        $result = $this->build(self::TREE, 'section_tree', $this->ctx(true, false), new FakeRecordFinder());
+
+        $this->assertSame([], $result['missing_props']);
+    }
+
+    public function testCollectsSectionUserFieldsMissingInTargetIblock(): void
+    {
+        $xml = '<export mode="section_tree"><section id="1" code="a" active="Y"><name>A</name><properties>'
+            . '<property code="UF_HAVE">1</property><property code="UF_NO">2</property></properties>'
+            . '<sections><section id="2" code="b" active="Y"><name>B</name><properties><property code="UF_NO">3</property></properties></section></sections>'
+            . '</section></export>';
+        $properties = new FakePropertySource([], [], [8 => ['UF_HAVE']]);
+        $result = $this->build($xml, 'section_tree', $this->ctx(true, false), new FakeRecordFinder(), 200, $properties);
+
+        $this->assertSame([['UF_NO'], ['UF_NO']], array_column($result['rows'], 'missing'));
+        $this->assertSame(['UF_NO' => 2], $result['missing_uf'], 'считается, у скольких разделов поля нет');
+        $this->assertSame([], $result['missing_props']);
     }
 
     public function testSectionSingleDoesNotDescendIntoChildren(): void

@@ -9,7 +9,8 @@ use Vspace\Ibexport\XmlStreamWriter;
 /** Читает раздел из БД и пишет его XML-узел (docs/xml-format.md, "Разделы"). */
 class SectionWriter
 {
-    public function __construct(private FileRefWriter $files)
+    /** @param (\Closure(string): void)|null $warn Куда сообщать о полях, которые не удалось выгрузить */
+    public function __construct(private FileRefWriter $files, private ?\Closure $warn = null)
     {
     }
 
@@ -36,12 +37,44 @@ class SectionWriter
         $this->files->write($w, 'picture', (int)$section['PICTURE']);
 
         $w->openTag('properties');
-        foreach ($section as $key => $value) {
-            if (strpos($key, 'UF_') === 0 && $value !== '' && $value !== null) {
-                $w->textTag('property', is_array($value) ? implode(', ', $value) : (string)$value, ['code' => $key]);
+        $this->writeUserFields($w, (int)$section['IBLOCK_ID'], $sectionId);
+        $w->closeTag('properties');
+    }
+
+    /**
+     * UF_*-поля раздела через штатный UserFieldManager (CIBlockSection::GetByID их не возвращает).
+     * Одиночное значение — текст узла, множественное — <value> на каждое; типы, значение которых
+     * привязано к этой инсталляции (файл, список и т.п.), не выгружаются — с предупреждением.
+     */
+    private function writeUserFields(XmlStreamWriter $w, int $iblockId, int $sectionId): void
+    {
+        global $USER_FIELD_MANAGER;
+
+        $fields = $USER_FIELD_MANAGER->GetUserFields('IBLOCK_' . $iblockId . '_SECTION', $sectionId, LANGUAGE_ID);
+        foreach ($fields as $code => $field) {
+            $values = UserFieldExport::values($field);
+            if (!$values) {
+                continue;
+            }
+
+            $type = (string)$field['USER_TYPE_ID'];
+            if (!UserFieldExport::isSupported($type)) {
+                if ($this->warn) {
+                    ($this->warn)('Поле раздела "' . $code . '" (тип "' . $type . '") не выгружено: значение этого типа привязано к данной инсталляции.');
+                }
+                continue;
+            }
+
+            if (($field['MULTIPLE'] ?? 'N') === 'Y') {
+                $w->openTag('property', ['code' => $code, 'multiple' => 'true']);
+                foreach ($values as $value) {
+                    $w->textTag('value', $value);
+                }
+                $w->closeTag('property');
+            } else {
+                $w->textTag('property', $values[0], ['code' => $code]);
             }
         }
-        $w->closeTag('properties');
     }
 
     /** section_single: фиксируем только ID/код прямых подразделов, без рекурсии (FR-2). */

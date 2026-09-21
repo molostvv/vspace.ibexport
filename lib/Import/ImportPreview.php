@@ -13,6 +13,9 @@ use SimpleXMLElement;
  * Совпадения по XML_ID — самые ненадёжные, поэтому для них строка помечается флагом:
  *  - FLAG_AMBIGUOUS — в инфоблоке несколько записей с таким XML_ID (импорт такую запись пропустит);
  *  - FLAG_NAME_MISMATCH — название найденной записи отличается от названия в архиве.
+ *
+ * Отдельно считаются свойства элементов и UF-поля разделов из архива, которых нет в целевом
+ * инфоблоке: их значения импорт пропустит (с предупреждением).
  */
 final class ImportPreview
 {
@@ -30,7 +33,13 @@ final class ImportPreview
     private bool $truncated = false;
     private int $limit = self::DEFAULT_LIMIT;
 
-    public function __construct(private ExistingRecordFinderInterface $finder)
+    /** @var array<string, int> код свойства элемента => у скольких показанных элементов его нет в целевом инфоблоке */
+    private array $missingProps = [];
+
+    /** @var array<string, int> код UF-поля => у скольких показанных разделов его нет в целевом инфоблоке */
+    private array $missingUserFields = [];
+
+    public function __construct(private ExistingRecordFinderInterface $finder, private PropertySourceInterface $properties)
     {
     }
 
@@ -41,14 +50,16 @@ final class ImportPreview
      * @return array{rows: array<int, array{
      *     kind: string, src_id: int, xml_id: string, code: string, name: string, active: bool, context: string,
      *     files: int, props: int, match_by: string|null, target_id: int|null, target_name: string|null,
-     *     flags: string[], action: string
-     * }>, truncated: bool}
+     *     flags: string[], missing: string[], action: string
+     * }>, truncated: bool, missing_props: array<string, int>, missing_uf: array<string, int>}
      */
     public function build(SimpleXMLElement $export, string $mode, ImportContext $ctx, int $limit = self::DEFAULT_LIMIT): array
     {
         $this->rows = [];
         $this->truncated = false;
         $this->limit = $limit;
+        $this->missingProps = [];
+        $this->missingUserFields = [];
 
         if ($mode === 'element') {
             foreach ($export->element as $element) {
@@ -64,7 +75,12 @@ final class ImportPreview
             $this->walkSection($export->section, [], $mode === 'section_tree', $ctx);
         }
 
-        return ['rows' => $this->rows, 'truncated' => $this->truncated];
+        return [
+            'rows' => $this->rows,
+            'truncated' => $this->truncated,
+            'missing_props' => $this->missingProps,
+            'missing_uf' => $this->missingUserFields,
+        ];
     }
 
     /** Названия считаются одинаковыми без учёта регистра и лишних пробелов. */
@@ -138,6 +154,15 @@ final class ImportPreview
             $files = count($node->xpath('.//@file_ref') ?: []);
         }
 
+        $missing = $this->missingCodes($kind, $node, $ctx->iblockId);
+        foreach ($missing as $missingCode) {
+            if ($kind === ExistingRecordFinderInterface::KIND_SECTION) {
+                $this->missingUserFields[$missingCode] = ($this->missingUserFields[$missingCode] ?? 0) + 1;
+            } else {
+                $this->missingProps[$missingCode] = ($this->missingProps[$missingCode] ?? 0) + 1;
+            }
+        }
+
         $this->rows[] = [
             'kind' => $kind,
             'src_id' => (int)$node['id'],
@@ -152,9 +177,36 @@ final class ImportPreview
             'target_id' => $target['id'] ?? null,
             'target_name' => $target['name'] ?? null,
             'flags' => $flags,
+            'missing' => $missing,
             'action' => $action,
         ];
 
         return true;
+    }
+
+    /**
+     * Коды свойств элемента / UF-полей раздела из узла, которых нет в целевом инфоблоке
+     * (то же, что пропустят PropertyResolver и SectionImporter).
+     *
+     * @return string[]
+     */
+    private function missingCodes(string $kind, SimpleXMLElement $node, int $iblockId): array
+    {
+        $codes = [];
+        foreach ($node->properties->property ?? [] as $property) {
+            $codes[] = (string)$property['code'];
+        }
+        if (!$codes) {
+            return [];
+        }
+
+        if ($kind === ExistingRecordFinderInterface::KIND_SECTION) {
+            $codes = array_filter($codes, static fn(string $code): bool => strpos($code, 'UF_') === 0);
+            $known = $this->properties->getSectionUserFieldCodes($iblockId);
+        } else {
+            $known = array_keys($this->properties->getDefinitions($iblockId));
+        }
+
+        return array_values(array_unique(array_diff($codes, $known)));
     }
 }
