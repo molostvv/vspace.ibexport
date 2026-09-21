@@ -45,6 +45,16 @@ class vspace_ibexport extends CModule
             }
         }
 
+        // Таблица импорта, созданная до появления MATCH_BY_XML_ID, — добавляем колонку (идемпотентно).
+        $connection = Application::getConnection();
+        $table = \Vspace\Ibexport\ImportJobTable::getTableName();
+        $helper = $connection->getSqlHelper();
+        // getTableFields() кэширует список колонок в рамках запроса, поэтому проверяем напрямую (константный литерал, без пользовательского ввода)
+        if ($connection->isTableExists($table) && !$connection->query('SHOW COLUMNS FROM ' . $helper->quote($table) . " LIKE 'MATCH_BY_XML_ID'")->fetch()) {
+            $type = $helper->getColumnTypeByField(\Vspace\Ibexport\ImportJobTable::getEntity()->getField('MATCH_BY_XML_ID'));
+            $connection->queryExecute('ALTER TABLE ' . $helper->quote($table) . ' ADD ' . $helper->quote('MATCH_BY_XML_ID') . ' ' . $type . " NOT NULL DEFAULT 'N'");
+        }
+
         return true;
     }
 
@@ -167,8 +177,45 @@ class vspace_ibexport extends CModule
         Loader::registerAutoLoadClasses($this->MODULE_ID, [
             'Vspace\\Ibexport\\Exporter' => 'lib/Exporter.php',
             'Vspace\\Ibexport\\Importer' => 'lib/Importer.php',
+            'Vspace\\Ibexport\\AbstractJobTable' => 'lib/AbstractJobTable.php',
             'Vspace\\Ibexport\\JobTable' => 'lib/JobTable.php',
             'Vspace\\Ibexport\\ImportJobTable' => 'lib/ImportJobTable.php',
+            'Vspace\\Ibexport\\TickRunner' => 'lib/TickRunner.php',
+            'Vspace\\Ibexport\\JobEventLog' => 'lib/JobEventLog.php',
+            'Vspace\\Ibexport\\IblockListProvider' => 'lib/IblockListProvider.php',
+            'Vspace\\Ibexport\\Admin\\AdminMessages' => 'lib/Admin/AdminMessages.php',
+            'Vspace\\Ibexport\\Admin\\ExportPageController' => 'lib/Admin/ExportPageController.php',
+            'Vspace\\Ibexport\\Admin\\ImportPageController' => 'lib/Admin/ImportPageController.php',
+            'Vspace\\Ibexport\\WalkResult' => 'lib/WalkResult.php',
+            'Vspace\\Ibexport\\TraversalFrame' => 'lib/TraversalFrame.php',
+            'Vspace\\Ibexport\\Export\\ExportFrame' => 'lib/Export/ExportFrame.php',
+            'Vspace\\Ibexport\\Import\\ImportFrame' => 'lib/Import/ImportFrame.php',
+            'Vspace\\Ibexport\\Export\\ExportContext' => 'lib/Export/ExportContext.php',
+            'Vspace\\Ibexport\\Export\\ExportStep' => 'lib/Export/ExportStep.php',
+            'Vspace\\Ibexport\\Export\\SectionTreeWalker' => 'lib/Export/SectionTreeWalker.php',
+            'Vspace\\Ibexport\\Export\\TreeSourceInterface' => 'lib/Export/TreeSourceInterface.php',
+            'Vspace\\Ibexport\\Export\\BitrixTreeSource' => 'lib/Export/BitrixTreeSource.php',
+            'Vspace\\Ibexport\\Export\\SectionWriter' => 'lib/Export/SectionWriter.php',
+            'Vspace\\Ibexport\\Export\\ElementWriter' => 'lib/Export/ElementWriter.php',
+            'Vspace\\Ibexport\\Export\\FileRefWriter' => 'lib/Export/FileRefWriter.php',
+            'Vspace\\Ibexport\\Export\\ArchiveBuilder' => 'lib/Export/ArchiveBuilder.php',
+            'Vspace\\Ibexport\\Import\\ImportContext' => 'lib/Import/ImportContext.php',
+            'Vspace\\Ibexport\\Import\\ImportReport' => 'lib/Import/ImportReport.php',
+            'Vspace\\Ibexport\\Import\\ImportStep' => 'lib/Import/ImportStep.php',
+            'Vspace\\Ibexport\\Import\\SectionTreeWalker' => 'lib/Import/SectionTreeWalker.php',
+            'Vspace\\Ibexport\\Import\\SectionImporter' => 'lib/Import/SectionImporter.php',
+            'Vspace\\Ibexport\\Import\\ElementImporter' => 'lib/Import/ElementImporter.php',
+            'Vspace\\Ibexport\\Import\\AbstractNodeImporter' => 'lib/Import/AbstractNodeImporter.php',
+            'Vspace\\Ibexport\\Import\\PropertyResolver' => 'lib/Import/PropertyResolver.php',
+            'Vspace\\Ibexport\\Import\\PropertySourceInterface' => 'lib/Import/PropertySourceInterface.php',
+            'Vspace\\Ibexport\\Import\\BitrixPropertySource' => 'lib/Import/BitrixPropertySource.php',
+            'Vspace\\Ibexport\\Import\\FileArrayFactoryInterface' => 'lib/Import/FileArrayFactoryInterface.php',
+            'Vspace\\Ibexport\\Import\\BitrixFileArrayFactory' => 'lib/Import/BitrixFileArrayFactory.php',
+            'Vspace\\Ibexport\\Import\\ExistingRecordFinderInterface' => 'lib/Import/ExistingRecordFinderInterface.php',
+            'Vspace\\Ibexport\\Import\\BitrixExistingRecordFinder' => 'lib/Import/BitrixExistingRecordFinder.php',
+            'Vspace\\Ibexport\\Import\\ImportPreview' => 'lib/Import/ImportPreview.php',
+            'Vspace\\Ibexport\\Export\\UserFieldExport' => 'lib/Export/UserFieldExport.php',
+            'Vspace\\Ibexport\\WarningList' => 'lib/WarningList.php',
             'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',

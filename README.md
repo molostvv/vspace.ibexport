@@ -16,7 +16,8 @@
     `main::OnAdminListDisplay`, без JS/DOM-хаков).
 - **Импорт** — загрузка ранее выгруженного архива и создание/обновление
   элементов и разделов в выбранном инфоблоке (не обязательно исходном).
-  Сопоставление при повторном импорте — по символьному коду (`CODE`).
+  Сопоставление при повторном импорте — по символьному коду (`CODE`); для
+  записей без кода — по `XML_ID` (отдельная опция формы, по умолчанию выключена).
 - Небольшие выгрузки/загрузки выполняются синхронно и сразу показывают
   результат; объёмные — уходят в фон (агент Bitrix, тик-бюджет,
   возобновление после разрыва) и не блокируют браузер.
@@ -64,11 +65,41 @@
 
 ## Архитектура
 
-- `lib/Exporter.php` / `lib/Importer.php` — основная логика, тик-бюджетный
-  DFS-обход дерева разделов с сохранением состояния обхода для
-  возобновления после разрыва.
-- `lib/JobTable.php` / `lib/ImportJobTable.php` — ORM-таблицы заданий
-  (`DataManager`).
+- `lib/Exporter.php` / `lib/Importer.php` — тонкие фасады (публичный API
+  модуля): расчёт объёма, создание задания, тик агента/AJAX-опроса. Сама
+  работа делегирована коллабораторам ниже.
+- `lib/AbstractJobTable.php` — общая основа ORM-таблиц заданий
+  (`DataManager`): служебные поля, `STATUS_*`, атомарный захват задания на
+  тик (`tryLock()`/`unlock()`), расчёт процента. Наследники:
+  `lib/JobTable.php` (экспорт) и `lib/ImportJobTable.php` (импорт) — только
+  собственные поля.
+- `lib/TickRunner.php` — общий движок фонового задания (шаблон тика:
+  проверка статуса, блокировка, `try/catch/finally`, перепланирование
+  `CAgent`, `toProgress()`), одинаков для экспорта и импорта; конкретный
+  шаг тика ему передаётся колбэком. `lib/JobEventLog.php` — запись в
+  журнал событий Bitrix.
+- `lib/Export/` — экспорт: `ExportStep` (один тик: стадии
+  `init → traverse → finalize`), `SectionTreeWalker` (возобновляемый
+  тик-бюджетный DFS-обход дерева разделов), `SectionWriter` /
+  `ElementWriter` / `FileRefWriter` (XML-узлы), `ArchiveBuilder` (ZIP),
+  `TreeSourceInterface` + `BitrixTreeSource` (источник дерева — граница
+  для тестов), `UserFieldExport` (правила выгрузки `UF_*` разделов), `ExportContext`.
+- `lib/Import/` — импорт: `ImportStep` (один тик), `SectionTreeWalker`
+  (зеркальный обход по распакованному XML), `SectionImporter` /
+  `ElementImporter` (создание/обновление записи), `PropertyResolver`
+  (XML-описание свойств → массив для `SetPropertyValuesEx`) с границами
+  `PropertySourceInterface` / `FileArrayFactoryInterface`, `ImportReport`
+  (счётчики и предупреждения), `ImportContext`; `ImportPreview` —
+  предпросмотр перед запуском (записи архива, совпадения в целевом
+  инфоблоке, ожидаемое действие) с границей `ExistingRecordFinderInterface` /
+  `BitrixExistingRecordFinder`.
+- `lib/WalkResult.php` — итог одной порции обхода (стек + обработанные
+  узлы), общий для экспорта и импорта.
+- `lib/TraversalFrame.php` — кадр стека обхода как value-объект
+  (типизированные поля, `toArray()`/`fromArray()`); `Export\ExportFrame` и
+  `Import\ImportFrame` — конкретные кадры экспорта и импорта. Массивный
+  формат кадра — прежний формат `STATE_JSON` (обратно читаем: задания,
+  начатые до рефакторинга, продолжаются как есть).
 - `lib/Integration/AdminListIntegration.php` — внедрение пункта "Экспорт" в
   списки элементов/разделов через `main::OnAdminListDisplay`.
 - `lib/Rights.php` — проверка прав на экспорт/импорт по конкретному
@@ -78,17 +109,51 @@
   `HttpClient`), `Settings.php` (токен/папка обмена), `ImportSource.php`
   (источник импорта "с Диска"), `Http/` (транспорт клиента), см.
   [docs/yandex-disk.md](docs/yandex-disk.md).
-- `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`).
+- `lib/IblockListProvider.php` — список инфоблоков, доступных
+  пользователю (`CIBlock::GetList` + проверка права колбэком), общий для
+  страниц экспорта и импорта. `lib/Admin/AdminMessages.php` — единый вывод
+  сообщений админки через штатный `CAdminMessage`.
+- `lib/Admin/ExportPageController.php` / `ImportPageController.php` — обработка
+  запроса страниц экспорта и импорта (`handle(HttpRequest): array`): разбор
+  параметров, валидация, права, шаги `estimate`/`run` и
+  `validate`/`disk_list`/`disk_import`/`run`, редирект на страницу прогресса.
+  HTML не формируют — возвращают данные для отрисовки формы.
+- `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`); `export.php`
+  и `import.php` — тонкие обёртки: контроллер + вёрстка формы.
+  `admin/css/vibx.css` — общие стили страниц модуля (`.vibx-note` и др.),
+  подключаются штатным `$APPLICATION->SetAdditionalCSS()`.
 
 ## Тесты
 
-Юнит-тесты (PHPUnit, 23 теста) покрывают чистую логику
-`YandexDisk\Client` (сборка URL, разбор ответов API, обработка ошибок,
-лимит размера файла) с поддельным HTTP-транспортом, а также разбор
-HTTP-редиректов в `YandexDisk\Http\BitrixHttpTransport::resolveRedirectUrl()`
-(в т.ч. protocol-relative `Location`, из-за которого аплоадер
-Яндекс.Диска ломал загрузку до исправления) — без сети и без поднятия
-ядра Bitrix:
+Юнит-тесты (PHPUnit, 123 теста) работают без сети и без поднятия ядра
+Bitrix — за счёт тонких интерфейсов на границе с Bitrix API (образец —
+`YandexDisk\Http\TransportInterface`) и поддельных реализаций в `tests/`:
+
+- `YandexDisk\Client` — сборка URL, разбор ответов API, обработка ошибок,
+  лимит размера файла (поддельный HTTP-транспорт); разбор HTTP-редиректов
+  в `YandexDisk\Http\BitrixHttpTransport::resolveRedirectUrl()`.
+- `TraversalFrame` (`ExportFrame`/`ImportFrame`) — round-trip
+  `toArray()`/`fromArray()`, порядок ключей, чтение `STATE_JSON`, записанного
+  до рефакторинга.
+- `Export\SectionTreeWalker` — переходы между фазами, постраничное чтение
+  элементов, `section_single`, возобновление после разрыва на каждом шаге
+  (поддельные `TreeSourceInterface` и писатели, часы подменены счётчиком).
+- `Import\SectionTreeWalker` — то же для импорта на настоящем SimpleXML
+  (поддельные импортёры).
+- `Import\PropertyResolver` — типы `L`/`F`/текстовые, нет определения
+  свойства, нет варианта списка, нет файла в архиве
+  (`PropertySourceInterface`, `FileArrayFactoryInterface`).
+- `Import\ImportReport` — счётчики и предупреждения (одинаковые считаются один раз).
+- `WarningList` — объединение одинаковых предупреждений задания и лимит размера `WARNINGS_JSON`.
+- `Export\UserFieldExport` — какие `UF_*`-поля раздела и как выгружаются; `Import\SectionImporter::parseUserFields()` — их разбор при импорте.
+- `Import\ImportPreview` — порядок строк, контекст раздела, счётчики файлов и
+  свойств, выбор ключа сопоставления и действия, предупреждения (другое
+  название, неоднозначный XML_ID), усечение по лимиту
+  (поддельный `ExistingRecordFinderInterface`).
+- `Import\AbstractNodeImporter::matchFilter()` — выбор ключа сопоставления (`CODE` / `XML_ID` / нет).
+
+Общий движок тика (`TickRunner`), таблицы заданий и страницы админки
+требуют ядра Bitrix и юнит-тестами не покрыты. Запуск:
 
 ```bash
 composer install
