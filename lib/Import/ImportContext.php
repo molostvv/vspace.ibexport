@@ -8,7 +8,8 @@ final class ImportContext
     public function __construct(
         public readonly int $iblockId,
         public readonly bool $updateByCode,
-        public readonly string $tmpDir
+        public readonly string $tmpDir,
+        public readonly bool $matchByXmlId = false
     ) {
     }
 }

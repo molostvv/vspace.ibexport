@@ -113,7 +113,7 @@ final class ImportStep
 
     private function buildContext(array $job, string $tmpDir): ImportContext
     {
-        return new ImportContext((int)$job['TARGET_IBLOCK_ID'], $job['UPDATE_BY_CODE'] === 'Y', $tmpDir);
+        return new ImportContext((int)$job['TARGET_IBLOCK_ID'], $job['UPDATE_BY_CODE'] === 'Y', $tmpDir, ($job['MATCH_BY_XML_ID'] ?? 'N') === 'Y');
     }
 
     private function buildElementImporter(): ElementImporter

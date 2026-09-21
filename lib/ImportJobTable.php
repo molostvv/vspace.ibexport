@@ -23,6 +23,7 @@ class ImportJobTable extends AbstractJobTable
             new Entity\IntegerField('TARGET_IBLOCK_ID', ['required' => true]),
             new Entity\IntegerField('PARENT_SECTION_ID', ['default_value' => 0]),
             new Entity\BooleanField('UPDATE_BY_CODE', ['values' => ['N', 'Y'], 'default_value' => 'Y']),
+            new Entity\BooleanField('MATCH_BY_XML_ID', ['values' => ['N', 'Y'], 'default_value' => 'N']), // запасной ключ сопоставления для записей без CODE
             new Entity\StringField('MODE', ['required' => true]), // element | section_single | section_tree — читается из корня export.xml
             new Entity\IntegerField('SOURCE_IBLOCK_ID', ['default_value' => 0]), // из export.xml, только для справки/журнала
             new Entity\IntegerField('CREATED_COUNT', ['default_value' => 0]),

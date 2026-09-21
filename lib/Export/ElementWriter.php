@@ -39,6 +39,7 @@ class ElementWriter
         $w->openTag('element', [
             'id' => $el['ID'],
             'code' => $el['CODE'],
+            'xml_id' => $el['~XML_ID'],
             'active' => $el['ACTIVE'],
             'sort' => $el['SORT'],
         ]);

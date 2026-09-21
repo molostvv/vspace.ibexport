@@ -27,6 +27,7 @@ class SectionWriter
         $w->openTag('section', [
             'id' => $section['ID'],
             'code' => $section['CODE'],
+            'xml_id' => $section['~XML_ID'],
             'active' => $section['ACTIVE'],
             'sort' => $section['SORT'],
         ]);

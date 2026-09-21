@@ -45,6 +45,16 @@ class vspace_ibexport extends CModule
             }
         }
 
+        // Таблица импорта, созданная до появления MATCH_BY_XML_ID, — добавляем колонку (идемпотентно).
+        $connection = Application::getConnection();
+        $table = \Vspace\Ibexport\ImportJobTable::getTableName();
+        $helper = $connection->getSqlHelper();
+        // getTableFields() кэширует список колонок в рамках запроса, поэтому проверяем напрямую (константный литерал, без пользовательского ввода)
+        if ($connection->isTableExists($table) && !$connection->query('SHOW COLUMNS FROM ' . $helper->quote($table) . " LIKE 'MATCH_BY_XML_ID'")->fetch()) {
+            $type = $helper->getColumnTypeByField(\Vspace\Ibexport\ImportJobTable::getEntity()->getField('MATCH_BY_XML_ID'));
+            $connection->queryExecute('ALTER TABLE ' . $helper->quote($table) . ' ADD ' . $helper->quote('MATCH_BY_XML_ID') . ' ' . $type . " NOT NULL DEFAULT 'N'");
+        }
+
         return true;
     }
 
@@ -201,6 +211,9 @@ class vspace_ibexport extends CModule
             'Vspace\\Ibexport\\Import\\BitrixPropertySource' => 'lib/Import/BitrixPropertySource.php',
             'Vspace\\Ibexport\\Import\\FileArrayFactoryInterface' => 'lib/Import/FileArrayFactoryInterface.php',
             'Vspace\\Ibexport\\Import\\BitrixFileArrayFactory' => 'lib/Import/BitrixFileArrayFactory.php',
+            'Vspace\\Ibexport\\Import\\ExistingRecordFinderInterface' => 'lib/Import/ExistingRecordFinderInterface.php',
+            'Vspace\\Ibexport\\Import\\BitrixExistingRecordFinder' => 'lib/Import/BitrixExistingRecordFinder.php',
+            'Vspace\\Ibexport\\Import\\ImportPreview' => 'lib/Import/ImportPreview.php',
             'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
             'Vspace\\Ibexport\\Options' => 'lib/Options.php',
             'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',

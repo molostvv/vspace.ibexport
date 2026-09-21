@@ -13,6 +13,13 @@ Loader::includeModule('iblock');
 
 IncludeModuleLangFile(__FILE__);
 
+/** Яндекс.Диск отдаёт "modified" в ISO 8601 (2026-09-18T17:48:45+00:00) — в списке файлов показываем в привычном для админки виде. */
+function vibxFormatDiskDate(string $iso): string
+{
+    $dt = date_create($iso);
+    return $dt ? $dt->format('d.m.Y H:i:s') : $iso;
+}
+
 $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
 $APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
@@ -23,11 +30,13 @@ $page = (new ImportPageController())->handle(\Bitrix\Main\Context::getCurrent()-
 [
     'errors' => $errors,
     'prepared' => $prepared, // результат Importer::prepareUpload()/ImportSource::prepareFromDisk() либо null
+    'preview' => $preview, // результат Importer::preview() — что будет создано/обновлено, либо null
     'diskFiles' => $diskFiles, // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске, либо null
     'iblocks' => $iblocksList,
     'iblockId' => $iblockId,
     'parentSectionRef' => $parentSectionRef,
     'updateByCode' => $updateByCode,
+    'matchByXmlId' => $matchByXmlId,
 ] = $page;
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
@@ -79,6 +88,14 @@ $tabControl = new CAdminTabControl('tabControl', [
         <td><?= GetMessage('IBIMPORT_FIELD_UPDATE_BY_CODE') ?></td>
         <td><input type="checkbox" name="UPDATE_BY_CODE" value="Y" <?= $updateByCode ? 'checked' : '' ?>></td>
     </tr>
+    <tr>
+        <td><?= GetMessage('IBIMPORT_FIELD_MATCH_BY_XML_ID') ?></td>
+        <td>
+            <input type="checkbox" name="MATCH_BY_XML_ID" value="Y" <?= $matchByXmlId ? 'checked' : '' ?>>
+            <div style="color:#888;font-size:11px;"><?= GetMessage('IBIMPORT_MATCH_BY_XML_ID_HINT') ?></div>
+            <div class="errortext" style="font-size:11px;"><?= GetMessage('IBIMPORT_MATCH_BY_XML_ID_RISK') ?></div>
+        </td>
+    </tr>
 
     <?php if ($prepared !== null): ?>
         <tr>
@@ -115,6 +132,57 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php $tabControl->End(); ?>
 </form>
 
+<?php if ($preview !== null): ?>
+    <?php
+    // Предпросмотр импорта — штатный CAdminList (тот же, что в журналах модуля), данные — массив из
+    // Importer::preview(), а не выборка из БД: без сортировки, фильтров и постраничности (список
+    // усечён до ImportPreview::DEFAULT_LIMIT строк). Своего CSS нет.
+    $previewList = new CAdminList('tbl_vspace_ibexport_import_preview');
+    $previewList->AddHeaders([
+        ['id' => 'KIND', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_KIND'), 'default' => true],
+        ['id' => 'SRC_ID', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_SRC_ID'), 'default' => true],
+        ['id' => 'XML_ID', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_XML_ID'), 'default' => true],
+        ['id' => 'CODE', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_CODE'), 'default' => true],
+        ['id' => 'NAME', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_NAME'), 'default' => true],
+        ['id' => 'ACTIVE', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_ACTIVE'), 'default' => true],
+        ['id' => 'CONTEXT', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_CONTEXT'), 'default' => true],
+        ['id' => 'FILES', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_FILES'), 'default' => true],
+        ['id' => 'PROPS', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_PROPS'), 'default' => true],
+        ['id' => 'MATCH', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_MATCH'), 'default' => true],
+        ['id' => 'ACTION', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_ACTION'), 'default' => true],
+    ]);
+    foreach ($preview['rows'] as $n => $r) {
+        if ($r['target_id'] !== null) {
+            $matchText = GetMessage($r['match_by'] === 'XML_ID' ? 'IBIMPORT_PREVIEW_MATCH_XML_ID' : 'IBIMPORT_PREVIEW_MATCH_CODE', ['#ID#' => $r['target_id']]);
+        } else {
+            $matchText = GetMessage($r['match_by'] === null ? 'IBIMPORT_PREVIEW_MATCH_NO_KEY' : 'IBIMPORT_PREVIEW_MATCH_NONE');
+        }
+        $row = &$previewList->AddRow($n + 1, $r);
+        $row->AddViewField('KIND', htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_KIND_' . strtoupper($r['kind']))));
+        $row->AddViewField('SRC_ID', (int)$r['src_id']);
+        $row->AddViewField('XML_ID', htmlspecialcharsbx($r['xml_id']));
+        $row->AddViewField('CODE', htmlspecialcharsbx($r['code']));
+        $row->AddViewField('NAME', htmlspecialcharsbx($r['name']));
+        $row->AddViewField('ACTIVE', GetMessage($r['active'] ? 'IBIMPORT_PREVIEW_YES' : 'IBIMPORT_PREVIEW_NO'));
+        $row->AddViewField('CONTEXT', htmlspecialcharsbx($r['context']));
+        $row->AddViewField('FILES', (int)$r['files']);
+        $row->AddViewField('PROPS', (int)$r['props']);
+        $row->AddViewField('MATCH', htmlspecialcharsbx($matchText));
+        $row->AddViewField('ACTION', htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_ACTION_' . strtoupper($r['action']))));
+        unset($row);
+    }
+    ?>
+    <div class="vibx-list-heading"><?= GetMessage('IBIMPORT_PREVIEW_HEADING') ?></div>
+    <?php if ($matchByXmlId): ?>
+        <?php AdminMessages::showErrors([GetMessage('IBIMPORT_MATCH_BY_XML_ID_RISK')]); ?>
+    <?php endif; ?>
+    <div style="color:#888;font-size:11px;margin-bottom:6px;"><?= GetMessage('IBIMPORT_PREVIEW_HINT') ?></div>
+    <?php if ($preview['truncated']): ?>
+        <div class="vibx-note"><?= GetMessage('IBIMPORT_PREVIEW_TRUNCATED', ['#SHOWN#' => count($preview['rows']), '#TOTAL#' => (int)$prepared['sections'] + (int)$prepared['elements']]) ?></div>
+    <?php endif; ?>
+    <?php $previewList->DisplayList(); ?>
+<?php endif; ?>
+
 <?php if ($diskFiles !== null): ?>
     <?php
     // Список файлов на Диске — превью-список для выбора файла перед
@@ -146,12 +214,20 @@ $tabControl = new CAdminTabControl('tabControl', [
                     <tr class="adm-list-table-row">
                         <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx($file['name']) ?></div></td>
                         <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></div></td>
-                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx($file['modified']) ?></div></td>
+                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx(vibxFormatDiskDate($file['modified'])) ?></div></td>
                         <td class="adm-list-table-cell">
                             <div class="adm-list-table-cell-inner">
                                 <form method="get" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
                                     <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
                                     <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
+                                    <?php // Настройки формы выше переносим в следующий шаг: контроллер при наличии STEP читает чекбокс как "снят", если ключа нет ?>
+                                    <input type="hidden" name="PARENT_SECTION_REF" value="<?= htmlspecialcharsbx($parentSectionRef) ?>">
+                                    <?php if ($updateByCode): ?>
+                                        <input type="hidden" name="UPDATE_BY_CODE" value="Y">
+                                    <?php endif; ?>
+                                    <?php if ($matchByXmlId): ?>
+                                        <input type="hidden" name="MATCH_BY_XML_ID" value="Y">
+                                    <?php endif; ?>
                                     <input type="hidden" name="STEP" value="disk_import">
                                     <input type="hidden" name="DISK_PATH" value="<?= htmlspecialcharsbx($file['path']) ?>">
                                     <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">

@@ -19,14 +19,48 @@ abstract class AbstractNodeImporter
     }
 
     /**
+     * Ключ сопоставления записи из архива с записью целевого инфоблока: CODE, а если он пуст и
+     * пользователь включил "сопоставлять по XML_ID" — XML_ID. Иначе сопоставлять не с чем (null).
+     *
+     * @return array{CODE: string}|array{XML_ID: string}|null
+     */
+    public static function matchFilter(string $code, string $xmlId, bool $matchByXmlId): ?array
+    {
+        if ($code !== '') {
+            return ['CODE' => $code];
+        }
+
+        return ($matchByXmlId && $xmlId !== '') ? ['XML_ID' => $xmlId] : null;
+    }
+
+    /** Подпись ключа сопоставления для текста предупреждений: "код news" / "XML_ID 1715". */
+    protected static function matchLabel(array $match): string
+    {
+        return isset($match['CODE']) ? 'код ' . $match['CODE'] : 'XML_ID ' . $match['XML_ID'];
+    }
+
+    /**
      * Ищет существующую запись по CODE в целевом инфоблоке (для сопоставления при повторном импорте).
      *
      * @param class-string<\Bitrix\Main\ORM\Data\DataManager> $ormClass ElementTable либо SectionTable
      */
     protected function findByCode(string $ormClass, int $iblockId, string $code): ?int
     {
+        return $this->findByMatch($ormClass, $iblockId, ['CODE' => $code]);
+    }
+
+    /**
+     * @param class-string<\Bitrix\Main\ORM\Data\DataManager> $ormClass ElementTable либо SectionTable
+     * @param array{CODE: string}|array{XML_ID: string}|null $match результат matchFilter()
+     */
+    protected function findByMatch(string $ormClass, int $iblockId, ?array $match): ?int
+    {
+        if ($match === null) {
+            return null;
+        }
+
         $row = $ormClass::getList([
-            'filter' => ['IBLOCK_ID' => $iblockId, 'CODE' => $code],
+            'filter' => ['IBLOCK_ID' => $iblockId] + $match,
             'select' => ['ID'],
             'limit' => 1,
         ])->fetch();

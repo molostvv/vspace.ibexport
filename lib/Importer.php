@@ -5,6 +5,9 @@ namespace Vspace\Ibexport;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use SimpleXMLElement;
+use Vspace\Ibexport\Import\BitrixExistingRecordFinder;
+use Vspace\Ibexport\Import\ImportContext;
+use Vspace\Ibexport\Import\ImportPreview;
 use Vspace\Ibexport\Import\ImportStep;
 
 Loader::includeModule('iblock');
@@ -119,6 +122,21 @@ class Importer
         ];
     }
 
+    /**
+     * Что будет сделано при импорте уже принятого архива (Import\ImportPreview): записи из export.xml
+     * с ключами сопоставления и ожидаемым действием при заданных опциях.
+     *
+     * @return array{rows: array[], truncated: bool}
+     */
+    public static function preview(string $tmpDirName, int $iblockId, bool $updateByCode, bool $matchByXmlId): array
+    {
+        $tmpDir = self::resolveTmpDir($tmpDirName);
+        $xml = simplexml_load_file($tmpDir . '/export.xml');
+
+        return (new ImportPreview(new BitrixExistingRecordFinder()))
+            ->build($xml, (string)$xml['mode'], new ImportContext($iblockId, $updateByCode, $tmpDir, $matchByXmlId));
+    }
+
     private static function countTree(SimpleXMLElement $export, string $mode): array
     {
         if ($mode === 'element') {
@@ -183,6 +201,7 @@ class Importer
             'TARGET_IBLOCK_ID' => $iblockId,
             'PARENT_SECTION_ID' => (int)($params['PARENT_SECTION_ID'] ?? 0),
             'UPDATE_BY_CODE' => !empty($params['UPDATE_BY_CODE']) ? 'Y' : 'N',
+            'MATCH_BY_XML_ID' => !empty($params['MATCH_BY_XML_ID']) ? 'Y' : 'N',
             'MODE' => $mode,
             'SOURCE_IBLOCK_ID' => (int)$xml['iblock_id'],
             'STATUS' => ImportJobTable::STATUS_NEW,

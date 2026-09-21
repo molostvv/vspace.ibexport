@@ -24,7 +24,7 @@ files/            — файлы (только если включена опц�
 ## `<section>`
 
 ```xml
-<section id="45" code="news" active="Y" sort="100">
+<section id="45" code="news" xml_id="45" active="Y" sort="100">
   <name>Новости</name>
   <description><![CDATA[...]]></description>
   <picture file_ref="files/301_cover.jpg" name="cover.jpg" size="12345" mime="image/jpeg"/>
@@ -53,7 +53,7 @@ files/            — файлы (только если включена опц�
 ## `<element>`
 
 ```xml
-<element id="501" code="news-item" active="Y" sort="500">
+<element id="501" code="news-item" xml_id="501" active="Y" sort="500">
   <name>Заголовок новости</name>
   <preview_text type="text"><![CDATA[...]]></preview_text>
   <detail_text type="html"><![CDATA[...]]></detail_text>

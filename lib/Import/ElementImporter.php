@@ -29,6 +29,7 @@ class ElementImporter extends AbstractNodeImporter
     {
         $iblockId = $ctx->iblockId;
         $code = trim((string)$node['code']);
+        $match = self::matchFilter($code, trim((string)$node['xml_id']), $ctx->matchByXmlId);
         $fields = [
             'IBLOCK_ID' => $iblockId,
             'NAME' => (string)$node->name,
@@ -71,13 +72,13 @@ class ElementImporter extends AbstractNodeImporter
         $this->applyFileField($fields, 'PREVIEW_PICTURE', $node->preview_picture, $ctx, $report);
         $this->applyFileField($fields, 'DETAIL_PICTURE', $node->detail_picture, $ctx, $report);
 
-        $existingId = $code !== '' ? $this->findByCode(ElementTable::class, $iblockId, $code) : null;
+        $existingId = $this->findByMatch(ElementTable::class, $iblockId, $match);
 
         if ($existingId) {
             if ($ctx->updateByCode) {
                 $element = new CIBlockElement();
                 if (!$element->Update($existingId, $fields)) {
-                    $report->addWarning('Элемент "' . $fields['NAME'] . '" (код ' . $code . '): ' . $element->LAST_ERROR);
+                    $report->addWarning('Элемент "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): ' . $element->LAST_ERROR);
                 }
                 $report->updated++;
             } else {
@@ -85,6 +86,9 @@ class ElementImporter extends AbstractNodeImporter
             }
             $elementId = $existingId;
         } else {
+            if (isset($match['XML_ID'])) {
+                $fields['XML_ID'] = $match['XML_ID']; // без этого повторный импорт снова не найдёт запись
+            }
             $element = new CIBlockElement();
             $newId = $element->Add($fields);
             if (!$newId) {

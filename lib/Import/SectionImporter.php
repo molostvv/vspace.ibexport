@@ -18,6 +18,7 @@ class SectionImporter extends AbstractNodeImporter
     {
         $iblockId = $ctx->iblockId;
         $code = trim((string)$node['code']);
+        $match = self::matchFilter($code, trim((string)$node['xml_id']), $ctx->matchByXmlId);
         $fields = [
             'IBLOCK_ID' => $iblockId,
             'NAME' => (string)$node->name,
@@ -35,13 +36,13 @@ class SectionImporter extends AbstractNodeImporter
         $this->applyFileField($fields, 'PICTURE', $node->picture, $ctx, $report);
         $this->applyUserFields($fields, $node->properties);
 
-        $existingId = $code !== '' ? $this->findByCode(SectionTable::class, $iblockId, $code) : null;
+        $existingId = $this->findByMatch(SectionTable::class, $iblockId, $match);
 
         if ($existingId) {
             if ($ctx->updateByCode) {
                 $section = new CIBlockSection();
                 if (!$section->Update($existingId, $fields)) {
-                    $report->addWarning('Раздел "' . $fields['NAME'] . '" (код ' . $code . '): ' . $section->LAST_ERROR);
+                    $report->addWarning('Раздел "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): ' . $section->LAST_ERROR);
                 }
                 $report->updated++;
             } else {
@@ -50,6 +51,9 @@ class SectionImporter extends AbstractNodeImporter
             return $existingId;
         }
 
+        if (isset($match['XML_ID'])) {
+            $fields['XML_ID'] = $match['XML_ID']; // без этого повторный импорт снова не найдёт запись
+        }
         $section = new CIBlockSection();
         $newId = $section->Add($fields);
         if (!$newId) {
