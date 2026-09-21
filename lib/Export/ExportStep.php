@@ -81,15 +81,15 @@ final class ExportStep
             ]);
             fclose($handle);
 
-            $state = ['stack' => SectionTreeWalker::initialStack((int)$job['ENTITY_ID'])];
-            JobTable::update($jobId, ['STAGE' => 'traverse', 'STATE_JSON' => json_encode($state)]);
+            $stateJson = json_encode(['stack' => ExportFrame::stackToArray(SectionTreeWalker::initialStack((int)$job['ENTITY_ID']))]);
+            JobTable::update($jobId, ['STAGE' => 'traverse', 'STATE_JSON' => $stateJson]);
             $job['STAGE'] = 'traverse';
-            $job['STATE_JSON'] = json_encode($state);
+            $job['STATE_JSON'] = $stateJson;
         }
 
         if ($job['STAGE'] === 'traverse') {
             $state = json_decode($job['STATE_JSON'], true);
-            $stack = $state['stack'];
+            $stack = ExportFrame::stackFromArray($state['stack']);
 
             $handle = fopen($xmlPath, 'a');
             $w = new XmlStreamWriter($handle, count($stack)); // отступ приблизительный, чисто косметический
@@ -106,7 +106,7 @@ final class ExportStep
             JobTable::update($jobId, [
                 'PROCESSED_SECTIONS' => (int)$job['PROCESSED_SECTIONS'] + $result->processedSections,
                 'PROCESSED_ELEMENTS' => (int)$job['PROCESSED_ELEMENTS'] + $result->processedElements,
-                'STATE_JSON' => json_encode(['stack' => $result->stack]),
+                'STATE_JSON' => json_encode(['stack' => ExportFrame::stackToArray($result->stack)]),
                 'STAGE' => $result->isFinished() ? 'finalize' : 'traverse',
             ]);
 

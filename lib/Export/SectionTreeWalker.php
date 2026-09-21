@@ -12,9 +12,10 @@ use Vspace\Ibexport\XmlStreamWriter;
  * истечёт крайний срок; состояние (стек) возвращается вызывающему для
  * сохранения в STATE_JSON, и следующий тик продолжает ровно с того же места.
  *
- * Кадр стека — один раздел в обработке; каждый проход цикла делает ровно
- * один шаг над верхним кадром: открыть раздел -> страницами выгрузить его
- * элементы -> перебрать подразделы (для каждого — новый кадр) -> закрыть.
+ * Кадр стека (ExportFrame) — один раздел в обработке; каждый проход цикла
+ * делает ровно один шаг над верхним кадром: открыть раздел -> страницами
+ * выгрузить его элементы -> перебрать подразделы (для каждого — новый кадр)
+ * -> закрыть.
  */
 final class SectionTreeWalker
 {
@@ -25,14 +26,14 @@ final class SectionTreeWalker
     ) {
     }
 
-    /** @return array[] Начальный стек обхода — один кадр корневого раздела */
+    /** @return ExportFrame[] Начальный стек обхода — один кадр корневого раздела */
     public static function initialStack(int $sectionId): array
     {
-        return [self::newFrame($sectionId)];
+        return [new ExportFrame($sectionId)];
     }
 
     /**
-     * @param array[] $stack Стек кадров (из initialStack() либо восстановленный из STATE_JSON)
+     * @param ExportFrame[] $stack Стек кадров (из initialStack() либо восстановленный из STATE_JSON)
      * @param bool $recursive true — mode=section_tree, false — mode=section_single (подразделы не обходятся, пишутся заглушки)
      * @param float $deadline Крайний срок тика (microtime(true))
      */
@@ -42,75 +43,59 @@ final class SectionTreeWalker
         $processedElements = 0;
 
         while (!empty($stack) && microtime(true) < $deadline) {
-            $i = count($stack) - 1;
-            $frame = &$stack[$i];
+            $frame = $stack[count($stack) - 1];
 
-            if (!$frame['opened']) {
-                $this->sections->writeOpen($w, $frame['section_id']);
-                $frame['opened'] = true;
+            if (!$frame->opened) {
+                $this->sections->writeOpen($w, $frame->sectionId);
+                $frame->opened = true;
                 $processedSections++;
             }
 
-            if ($frame['phase'] === 'elements') {
-                if (!$frame['elements_tag_open']) {
+            if ($frame->phase === ExportFrame::PHASE_ELEMENTS) {
+                if (!$frame->elementsTagOpen) {
                     $w->openTag('elements');
-                    $frame['elements_tag_open'] = true;
+                    $frame->elementsTagOpen = true;
                 }
 
-                $ids = $this->source->getElementIdsPage($ctx->iblockId, $frame['section_id'], $ctx->activeOnly, $ctx->batchSize, $frame['elements_offset']);
+                $ids = $this->source->getElementIdsPage($ctx->iblockId, $frame->sectionId, $ctx->activeOnly, $ctx->batchSize, $frame->elementsOffset);
                 foreach ($ids as $id) {
                     $this->elements->writeRow($w, $id);
                     $processedElements++;
                 }
-                $frame['elements_offset'] += count($ids);
+                $frame->elementsOffset += count($ids);
 
                 if (count($ids) < $ctx->batchSize) {
                     $w->closeTag('elements');
-                    $frame['phase'] = 'children';
+                    $frame->phase = ExportFrame::PHASE_CHILDREN;
                 }
-            } elseif ($frame['phase'] === 'children') {
+            } elseif ($frame->phase === ExportFrame::PHASE_CHILDREN) {
                 if (!$recursive) {
                     // section_single: фиксируем только ID/код прямых подразделов, без рекурсии (FR-2).
-                    $this->sections->writeSubsectionStubs($w, $ctx->iblockId, $frame['section_id'], $ctx->activeOnly);
-                    $frame['phase'] = 'done';
-                } elseif ($frame['children_ids'] === null) {
-                    $frame['children_ids'] = $this->source->getChildSectionIds($ctx->iblockId, $frame['section_id'], $ctx->activeOnly);
-                    $frame['children_index'] = 0;
-                    if (!empty($frame['children_ids'])) {
+                    $this->sections->writeSubsectionStubs($w, $ctx->iblockId, $frame->sectionId, $ctx->activeOnly);
+                    $frame->phase = ExportFrame::PHASE_DONE;
+                } elseif ($frame->childrenIds === null) {
+                    $frame->childrenIds = $this->source->getChildSectionIds($ctx->iblockId, $frame->sectionId, $ctx->activeOnly);
+                    $frame->childrenIndex = 0;
+                    if (!empty($frame->childrenIds)) {
                         $w->openTag('sections');
-                        $frame['sections_tag_open'] = true;
+                        $frame->sectionsTagOpen = true;
                     }
-                } elseif ($frame['children_index'] < count($frame['children_ids'])) {
-                    $childId = $frame['children_ids'][$frame['children_index']];
-                    $frame['children_index']++;
-                    $stack[] = self::newFrame($childId);
+                } elseif ($frame->childrenIndex < count($frame->childrenIds)) {
+                    $childId = $frame->childrenIds[$frame->childrenIndex];
+                    $frame->childrenIndex++;
+                    $stack[] = new ExportFrame($childId);
                 } else {
-                    if (!empty($frame['sections_tag_open'])) {
+                    if ($frame->sectionsTagOpen) {
                         $w->closeTag('sections');
                     }
-                    $frame['phase'] = 'done';
+                    $frame->phase = ExportFrame::PHASE_DONE;
                 }
             } else { // done — раздел полностью обработан
                 $w->closeTag('section');
                 array_pop($stack);
             }
-            unset($frame);
         }
 
         return new WalkResult($stack, $processedSections, $processedElements);
-    }
-
-    private static function newFrame(int $sectionId): array
-    {
-        return [
-            'section_id' => $sectionId,
-            'opened' => false,
-            'phase' => 'elements',
-            'elements_offset' => 0,
-            'elements_tag_open' => false,
-            'children_ids' => null,
-            'children_index' => 0,
-            'sections_tag_open' => false,
-        ];
     }
 }

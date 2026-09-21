@@ -67,7 +67,7 @@ final class ImportStep
         $parentSectionId = (int)$job['PARENT_SECTION_ID'] ?: null;
 
         $state = $job['STATE_JSON'] ? json_decode($job['STATE_JSON'], true) : null;
-        $stack = $state['stack'] ?? SectionTreeWalker::initialStack();
+        $stack = isset($state['stack']) ? ImportFrame::stackFromArray($state['stack']) : SectionTreeWalker::initialStack();
         $report = ImportReport::withCounts($state['counts'] ?? []);
 
         $walker = new SectionTreeWalker(
@@ -84,7 +84,7 @@ final class ImportStep
             'CREATED_COUNT' => $report->created,
             'UPDATED_COUNT' => $report->updated,
             'SKIPPED_COUNT' => $report->skipped,
-            'STATE_JSON' => json_encode(['stack' => $result->stack, 'counts' => $report->toCounts()]),
+            'STATE_JSON' => json_encode(['stack' => ImportFrame::stackToArray($result->stack), 'counts' => $report->toCounts()]),
             'STAGE' => $result->isFinished() ? 'finalize' : 'traverse',
         ]);
 

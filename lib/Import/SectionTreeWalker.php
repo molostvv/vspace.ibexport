@@ -8,9 +8,9 @@ use Vspace\Ibexport\WalkResult;
 /**
  * Зеркало Export\SectionTreeWalker: возобновляемый DFS-обход дерева разделов
  * при импорте, только источник — уже распакованный export.xml, а не
- * постраничные SQL-выборки. Кадр стека хранит не узел XML, а его путь —
- * последовательность индексов дочерних <sections><section> от корня
- * (сам XML разбирается заново на каждый тик), поэтому стек легко
+ * постраничные SQL-выборки. Кадр стека (ImportFrame) хранит не узел XML, а
+ * его путь — последовательность индексов дочерних <sections><section> от
+ * корня (сам XML разбирается заново на каждый тик), поэтому стек легко
  * сериализуется в STATE_JSON между тиками.
  *
  * Один вызов walk() — порция работы в пределах бюджета времени тика; каждый
@@ -25,15 +25,15 @@ final class SectionTreeWalker
     ) {
     }
 
-    /** @return array[] Начальный стек обхода — один кадр корневого <section> (пустой путь) */
+    /** @return ImportFrame[] Начальный стек обхода — один кадр корневого <section> (пустой путь) */
     public static function initialStack(): array
     {
-        return [self::newFrame([])];
+        return [new ImportFrame([])];
     }
 
     /**
      * @param SimpleXMLElement $rootSection Корневой <section> export.xml
-     * @param array[] $stack Стек кадров (из initialStack() либо восстановленный из STATE_JSON)
+     * @param ImportFrame[] $stack Стек кадров (из initialStack() либо восстановленный из STATE_JSON)
      * @param int|null $parentSectionId В какой раздел целевого инфоблока вкладывается корневой раздел (null — в корень)
      * @param bool $recursive true — mode=section_tree, false — mode=section_single (вложенные подразделы не импортируются)
      * @param float $deadline Крайний срок тика (microtime(true))
@@ -52,58 +52,45 @@ final class SectionTreeWalker
 
         while (!empty($stack) && microtime(true) < $deadline) {
             $i = count($stack) - 1;
-            $frame = &$stack[$i];
-            $node = self::nodeByPath($rootSection, $frame['path']);
+            $frame = $stack[$i];
+            $node = self::nodeByPath($rootSection, $frame->path);
 
-            if (!$frame['opened']) {
-                $parentId = $i > 0 ? $stack[$i - 1]['target_id'] : $parentSectionId;
-                $frame['target_id'] = $this->sections->import($node, $parentId, $ctx, $report);
-                $frame['opened'] = true;
+            if (!$frame->opened) {
+                $parentId = $i > 0 ? $stack[$i - 1]->targetId : $parentSectionId;
+                $frame->targetId = $this->sections->import($node, $parentId, $ctx, $report);
+                $frame->opened = true;
                 $processedSections++;
             }
 
-            if ($frame['phase'] === 'elements') {
+            if ($frame->phase === ImportFrame::PHASE_ELEMENTS) {
                 $elements = isset($node->elements->element) ? $node->elements->element : [];
-                if ($frame['elements_index'] < count($elements)) {
-                    $elementNode = $elements[$frame['elements_index']];
-                    $frame['elements_index']++;
-                    $this->elements->import($elementNode, $frame['target_id'], $ctx, $report, false);
+                if ($frame->elementsIndex < count($elements)) {
+                    $elementNode = $elements[$frame->elementsIndex];
+                    $frame->elementsIndex++;
+                    $this->elements->import($elementNode, $frame->targetId, $ctx, $report, false);
                     $processedElements++;
                 } else {
-                    $frame['phase'] = 'children';
+                    $frame->phase = ImportFrame::PHASE_CHILDREN;
                 }
-            } elseif ($frame['phase'] === 'children') {
+            } elseif ($frame->phase === ImportFrame::PHASE_CHILDREN) {
                 if (!$recursive) {
-                    $frame['phase'] = 'done';
+                    $frame->phase = ImportFrame::PHASE_DONE;
                 } else {
                     $children = isset($node->sections->section) ? $node->sections->section : [];
-                    if ($frame['children_index'] < count($children)) {
-                        $childPath = array_merge($frame['path'], [$frame['children_index']]);
-                        $frame['children_index']++;
-                        $stack[] = self::newFrame($childPath);
+                    if ($frame->childrenIndex < count($children)) {
+                        $childPath = array_merge($frame->path, [$frame->childrenIndex]);
+                        $frame->childrenIndex++;
+                        $stack[] = new ImportFrame($childPath);
                     } else {
-                        $frame['phase'] = 'done';
+                        $frame->phase = ImportFrame::PHASE_DONE;
                     }
                 }
             } else { // done
                 array_pop($stack);
             }
-            unset($frame);
         }
 
         return new WalkResult($stack, $processedSections, $processedElements);
-    }
-
-    private static function newFrame(array $path): array
-    {
-        return [
-            'path' => $path,
-            'target_id' => null,
-            'opened' => false,
-            'phase' => 'elements',
-            'elements_index' => 0,
-            'children_index' => 0,
-        ];
     }
 
     /** Идёт от корневого <section> по последовательности индексов дочерних <sections><section>. */
