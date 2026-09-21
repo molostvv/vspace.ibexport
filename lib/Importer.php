@@ -100,7 +100,22 @@ class Importer
             );
         }
 
-        $xml = @simplexml_load_file($xmlPath);
+        return self::describeExtracted($tmpDir, $tmpDirName, $sourceFileName);
+    }
+
+    /**
+     * Повторно открывает уже принятый архив (распакованный ранее prepareUpload()/prepareFromDisk()) — для шага
+     * "Пересчитать" на странице импорта: без повторной загрузки файла.
+     */
+    public static function reopen(string $tmpDirName, string $sourceFileName): array
+    {
+        return self::describeExtracted(self::resolveTmpDir($tmpDirName), $tmpDirName, $sourceFileName);
+    }
+
+    /** Разбор распакованного export.xml: режим и объём. */
+    private static function describeExtracted(string $tmpDir, string $tmpDirName, string $sourceFileName): array
+    {
+        $xml = @simplexml_load_file($tmpDir . '/export.xml');
         if ($xml === false) {
             throw new \Exception('Не удалось разобрать export.xml — файл повреждён.');
         }

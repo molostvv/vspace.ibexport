@@ -71,7 +71,7 @@ XML;
 
     public function testMatchByCodeOnlyByDefault(): void
     {
-        $finder = new FakeRecordFinder(['section:CODE:root' => 100, 'element:CODE:el-code' => 200, 'element:XML_ID:e-11' => 300]);
+        $finder = new FakeRecordFinder(['section:CODE:root' => [100, 'Root'], 'element:CODE:el-code' => [200, 'WithCode'], 'element:XML_ID:e-11' => [300, 'NoCode']]);
         $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, false), $finder)['rows'];
 
         $this->assertSame([100, 200, null, null, null], array_column($rows, 'target_id'));
@@ -82,7 +82,7 @@ XML;
 
     public function testXmlIdFallbackOnlyForRecordsWithoutCode(): void
     {
-        $finder = new FakeRecordFinder(['element:XML_ID:e-11' => 300, 'section:XML_ID:s-2' => 400, 'element:XML_ID:e-10' => 999]);
+        $finder = new FakeRecordFinder(['element:XML_ID:e-11' => [300, 'NoCode'], 'section:XML_ID:s-2' => [400, 'Child'], 'element:XML_ID:e-10' => [999, 'x']]);
         $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
 
         $this->assertSame([null, null, 300, 400, null], array_column($rows, 'target_id'));
@@ -92,11 +92,59 @@ XML;
 
     public function testActionIsSkipWhenUpdateIsOff(): void
     {
-        $finder = new FakeRecordFinder(['element:CODE:el-code' => 200]);
+        $finder = new FakeRecordFinder(['element:CODE:el-code' => [200, 'WithCode']]);
         $rows = $this->build(self::TREE, 'section_tree', $this->ctx(false, false), $finder)['rows'];
 
         $this->assertSame('skip', $rows[1]['action']);
         $this->assertSame('create', $rows[0]['action']);
+    }
+
+    public function testXmlIdMatchWithDifferentNameIsFlaggedButStillUpdates(): void
+    {
+        $finder = new FakeRecordFinder(['element:XML_ID:e-11' => [300, 'Совсем другое название']]);
+        $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
+
+        $this->assertSame(['name_mismatch'], $rows[2]['flags']);
+        $this->assertSame(300, $rows[2]['target_id']);
+        $this->assertSame('Совсем другое название', $rows[2]['target_name']);
+        $this->assertSame('update', $rows[2]['action'], 'название — предупреждение, а не запрет: запись могли переименовать');
+    }
+
+    public function testNameComparisonIgnoresCaseAndWhitespace(): void
+    {
+        $finder = new FakeRecordFinder(['element:XML_ID:e-11' => [300, "  nocode
+"]]);
+        $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
+
+        $this->assertSame([], $rows[2]['flags']);
+        $this->assertTrue(ImportPreview::sameName('Наши  отличия', ' наши отличия '));
+        $this->assertFalse(ImportPreview::sameName('Наши отличия', 'Наши кейсы'));
+    }
+
+    public function testCodeMatchIsNeverFlaggedForName(): void
+    {
+        $finder = new FakeRecordFinder(['element:CODE:el-code' => [200, 'Переименованный элемент']]);
+        $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
+
+        $this->assertSame([], $rows[1]['flags'], 'совпадение по коду надёжно, сверка названия — только для XML_ID');
+    }
+
+    public function testSeveralRecordsWithSameXmlIdAreAmbiguousAndSkipped(): void
+    {
+        $finder = new FakeRecordFinder(['element:XML_ID:e-11' => [[300, 'NoCode'], [301, 'NoCode']]]);
+        $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
+
+        $this->assertSame(['ambiguous'], $rows[2]['flags']);
+        $this->assertSame('skip', $rows[2]['action'], 'обновлять "какую-то из" записей нельзя');
+    }
+
+    public function testSeveralRecordsWithSameCodeKeepOldBehaviour(): void
+    {
+        $finder = new FakeRecordFinder(['element:CODE:el-code' => [[200, 'WithCode'], [201, 'WithCode']]]);
+        $rows = $this->build(self::TREE, 'section_tree', $this->ctx(true, true), $finder)['rows'];
+
+        $this->assertSame([], $rows[1]['flags']);
+        $this->assertSame('update', $rows[1]['action']);
     }
 
     public function testSectionSingleDoesNotDescendIntoChildren(): void

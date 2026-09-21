@@ -9,12 +9,19 @@ use SimpleXMLElement;
  * обработки (раздел -> его элементы -> подразделы) с ключами сопоставления и тем,
  * что с ними случится в целевом инфоблоке (создать / обновить / пропустить). Ничего
  * не пишет; логика выбора ключа и действия та же, что в SectionImporter/ElementImporter.
+ *
+ * Совпадения по XML_ID — самые ненадёжные, поэтому для них строка помечается флагом:
+ *  - FLAG_AMBIGUOUS — в инфоблоке несколько записей с таким XML_ID (импорт такую запись пропустит);
+ *  - FLAG_NAME_MISMATCH — название найденной записи отличается от названия в архиве.
  */
 final class ImportPreview
 {
     public const ACTION_CREATE = 'create';
     public const ACTION_UPDATE = 'update';
     public const ACTION_SKIP = 'skip';
+
+    public const FLAG_AMBIGUOUS = 'ambiguous';
+    public const FLAG_NAME_MISMATCH = 'name_mismatch';
 
     public const DEFAULT_LIMIT = 200;
 
@@ -33,7 +40,8 @@ final class ImportPreview
      * @param int $limit Сколько строк вернуть (поиск в БД — по одному запросу на строку, поэтому список ограничен)
      * @return array{rows: array<int, array{
      *     kind: string, src_id: int, xml_id: string, code: string, name: string, active: bool, context: string,
-     *     files: int, props: int, match_by: string|null, target_id: int|null, action: string
+     *     files: int, props: int, match_by: string|null, target_id: int|null, target_name: string|null,
+     *     flags: string[], action: string
      * }>, truncated: bool}
      */
     public function build(SimpleXMLElement $export, string $mode, ImportContext $ctx, int $limit = self::DEFAULT_LIMIT): array
@@ -57,6 +65,14 @@ final class ImportPreview
         }
 
         return ['rows' => $this->rows, 'truncated' => $this->truncated];
+    }
+
+    /** Названия считаются одинаковыми без учёта регистра и лишних пробелов. */
+    public static function sameName(string $a, string $b): bool
+    {
+        $normalize = static fn(string $s): string => mb_strtolower(trim((string)preg_replace('/\s+/u', ' ', $s)));
+
+        return $normalize($a) === $normalize($b);
     }
 
     /** @param string[] $parentNames Названия разделов-предков в архиве */
@@ -93,11 +109,25 @@ final class ImportPreview
 
         $code = trim((string)$node['code']);
         $xmlId = trim((string)$node['xml_id']);
+        $name = (string)$node->name;
         $match = AbstractNodeImporter::matchFilter($code, $xmlId, $ctx->matchByXmlId);
-        $targetId = $match === null ? null : $this->finder->findId($kind, $ctx->iblockId, $match);
+        $found = $match === null ? [] : $this->finder->find($kind, $ctx->iblockId, $match);
+        $target = $found[0] ?? null;
 
-        if ($targetId === null) {
+        // Как в AbstractNodeImporter::findMatch(): неоднозначность и сверка названия — только для XML_ID (по CODE поведение прежнее).
+        $byXmlId = isset($match['XML_ID']);
+        $ambiguous = $byXmlId && count($found) > 1;
+        $flags = [];
+        if ($ambiguous) {
+            $flags[] = self::FLAG_AMBIGUOUS;
+        } elseif ($byXmlId && $target !== null && !self::sameName($name, $target['name'])) {
+            $flags[] = self::FLAG_NAME_MISMATCH;
+        }
+
+        if ($target === null) {
             $action = self::ACTION_CREATE;
+        } elseif ($ambiguous) {
+            $action = self::ACTION_SKIP;
         } else {
             $action = $ctx->updateByCode ? self::ACTION_UPDATE : self::ACTION_SKIP;
         }
@@ -113,13 +143,15 @@ final class ImportPreview
             'src_id' => (int)$node['id'],
             'xml_id' => $xmlId,
             'code' => $code,
-            'name' => (string)$node->name,
+            'name' => $name,
             'active' => (string)$node['active'] !== 'N',
             'context' => $context,
             'files' => $files,
             'props' => isset($node->properties->property) ? count($node->properties->property) : 0,
             'match_by' => $match === null ? null : (string)array_key_first($match),
-            'target_id' => $targetId,
+            'target_id' => $target['id'] ?? null,
+            'target_name' => $target['name'] ?? null,
+            'flags' => $flags,
             'action' => $action,
         ];
 

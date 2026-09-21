@@ -55,17 +55,31 @@ abstract class AbstractNodeImporter
      */
     protected function findByMatch(string $ormClass, int $iblockId, ?array $match): ?int
     {
+        return $this->findMatch($ormClass, $iblockId, $match)['id'];
+    }
+
+    /**
+     * То же с признаком неоднозначности: в инфоблоке несколько записей с таким XML_ID (XML_ID не уникален в Bitrix,
+     * и брать "первую попавшуюся" значило бы обновить чужую запись). Для CODE поведение прежнее — берётся одна запись.
+     *
+     * @param class-string<\Bitrix\Main\ORM\Data\DataManager> $ormClass ElementTable либо SectionTable
+     * @param array{CODE: string}|array{XML_ID: string}|null $match результат matchFilter()
+     * @return array{id: int|null, ambiguous: bool} id — запись с наименьшим ID
+     */
+    protected function findMatch(string $ormClass, int $iblockId, ?array $match): array
+    {
         if ($match === null) {
-            return null;
+            return ['id' => null, 'ambiguous' => false];
         }
 
-        $row = $ormClass::getList([
+        $rows = $ormClass::getList([
             'filter' => ['IBLOCK_ID' => $iblockId] + $match,
             'select' => ['ID'],
-            'limit' => 1,
-        ])->fetch();
+            'order' => ['ID' => 'ASC'],
+            'limit' => isset($match['XML_ID']) ? 2 : 1,
+        ])->fetchAll();
 
-        return $row ? (int)$row['ID'] : null;
+        return ['id' => $rows ? (int)$rows[0]['ID'] : null, 'ambiguous' => count($rows) > 1];
     }
 
     /** Прямые файловые поля (PICTURE/PREVIEW_PICTURE/DETAIL_PICTURE) — самозакрывающийся тег с атрибутом file_ref. */

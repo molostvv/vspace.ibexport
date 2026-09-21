@@ -9,9 +9,11 @@ interface ExistingRecordFinderInterface
     public const KIND_ELEMENT = 'element';
 
     /**
+     * Не больше двух записей (по возрастанию ID): двух достаточно, чтобы отличить однозначное совпадение от неоднозначного.
+     *
      * @param self::KIND_* $kind
      * @param array{CODE: string}|array{XML_ID: string} $match результат AbstractNodeImporter::matchFilter()
-     * @return int|null ID найденной записи либо null
+     * @return list<array{id: int, name: string}>
      */
-    public function findId(string $kind, int $iblockId, array $match): ?int;
+    public function find(string $kind, int $iblockId, array $match): array;
 }

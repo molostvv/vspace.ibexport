@@ -36,7 +36,14 @@ class SectionImporter extends AbstractNodeImporter
         $this->applyFileField($fields, 'PICTURE', $node->picture, $ctx, $report);
         $this->applyUserFields($fields, $node->properties);
 
-        $existingId = $this->findByMatch(SectionTable::class, $iblockId, $match);
+        $found = $this->findMatch(SectionTable::class, $iblockId, $match);
+        $existingId = $found['id'];
+        if ($found['ambiguous']) {
+            // Сам раздел не обновляем, но вложенные записи надо куда-то класть — в раздел с наименьшим ID.
+            $report->addWarning('Раздел "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): в целевом инфоблоке несколько разделов с таким XML_ID, раздел не обновлён; вложенные записи помещены в раздел ID ' . $existingId . '.');
+            $report->skipped++;
+            return $existingId;
+        }
 
         if ($existingId) {
             if ($ctx->updateByCode) {

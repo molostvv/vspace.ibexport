@@ -14,6 +14,7 @@ use Vspace\Ibexport\YandexDisk\ImportSource;
 /**
  * Обработка запроса страницы "Импорт" (admin/import.php). Шаги (параметр STEP):
  *  - validate    — принять загруженный архив и посчитать объём;
+ *  - recalc      — пересчитать предпросмотр уже принятого архива по текущим отметкам формы (без повторной загрузки);
  *  - disk_list   — показать список файлов в папке обмена на Яндекс.Диске;
  *  - disk_import — принять выбранный файл с Диска (то же, что validate, но источник — Диск);
  *  - run         — создать задание импорта по уже провалидированному архиву и перейти к странице прогресса.
@@ -62,7 +63,7 @@ final class ImportPageController
         // Инфоблоки, в которые текущий пользователь может импортировать данные.
         $iblocks = IblockListProvider::getAvailable(Rights::canImport(...));
 
-        if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
+        if (in_array($step, ['validate', 'recalc', 'run', 'disk_list', 'disk_import'], true)) {
             try {
                 if ($iblockId <= 0) {
                     throw new \Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
@@ -73,6 +74,9 @@ final class ImportPageController
 
                 if ($step === 'validate') {
                     $prepared = Importer::prepareUpload($request->getFile('ARCHIVE') ?? []);
+                } elseif ($step === 'recalc') {
+                    // Тот же уже принятый архив (скрытые поля формы) — заново считаем предпросмотр по текущим отметкам, файл не перезагружается.
+                    $prepared = Importer::reopen((string)($request->get('TMP_DIR') ?? ''), (string)($request->get('SOURCE_FILE_NAME') ?? ''));
                 } elseif ($step === 'disk_list') {
                     // Отдельный, полностью ручной шаг (ТЗ "Экспорт в Яндекс.Диск",
                     // раздел 3) — недоступность Диска здесь не мешает обычной

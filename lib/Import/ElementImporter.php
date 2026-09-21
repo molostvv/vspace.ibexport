@@ -72,7 +72,14 @@ class ElementImporter extends AbstractNodeImporter
         $this->applyFileField($fields, 'PREVIEW_PICTURE', $node->preview_picture, $ctx, $report);
         $this->applyFileField($fields, 'DETAIL_PICTURE', $node->detail_picture, $ctx, $report);
 
-        $existingId = $this->findByMatch(ElementTable::class, $iblockId, $match);
+        $found = $this->findMatch(ElementTable::class, $iblockId, $match);
+        if ($found['ambiguous']) {
+            // Обновлять "какую-то из" записей нельзя, а создавать ещё одну с тем же XML_ID — плодить неоднозначность.
+            $report->addWarning('Элемент "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): в целевом инфоблоке несколько записей с таким XML_ID, элемент пропущен.');
+            $report->skipped++;
+            return;
+        }
+        $existingId = $found['id'];
 
         if ($existingId) {
             if ($ctx->updateByCode) {

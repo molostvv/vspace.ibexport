@@ -115,8 +115,9 @@ $tabControl = new CAdminTabControl('tabControl', [
 
     <?php $tabControl->Buttons(); ?>
     <?php if ($prepared !== null): ?>
-        <input type="hidden" name="STEP" value="run">
-        <input type="submit" class="adm-btn adm-btn-save" value="<?= GetMessage('IBIMPORT_BTN_RUN') ?>">
+        <?php // Первая кнопка формы — "Запустить импорт": именно её срабатывает Enter; STEP передаётся значением нажатой кнопки. ?>
+        <button type="submit" name="STEP" value="run" class="adm-btn adm-btn-save"><?= GetMessage('IBIMPORT_BTN_RUN') ?></button>
+        <button type="submit" name="STEP" value="recalc" class="adm-btn"><?= GetMessage('IBIMPORT_BTN_RECALC') ?></button>
     <?php else: ?>
         <button type="submit" name="STEP" value="validate" class="adm-btn adm-btn-save"><?= GetMessage('IBIMPORT_BTN_VALIDATE') ?></button>
         <?php if (Options::isYandexDiskEnabled() && Settings::hasToken()): ?>
@@ -149,13 +150,32 @@ $tabControl = new CAdminTabControl('tabControl', [
         ['id' => 'FILES', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_FILES'), 'default' => true],
         ['id' => 'PROPS', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_PROPS'), 'default' => true],
         ['id' => 'MATCH', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_MATCH'), 'default' => true],
+        ['id' => 'FOUND', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_FOUND'), 'default' => true],
+        ['id' => 'NOTE', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_NOTE'), 'default' => true],
         ['id' => 'ACTION', 'content' => GetMessage('IBIMPORT_PREVIEW_COL_ACTION'), 'default' => true],
     ]);
+    $suspicious = 0;
     foreach ($preview['rows'] as $n => $r) {
         if ($r['target_id'] !== null) {
             $matchText = GetMessage($r['match_by'] === 'XML_ID' ? 'IBIMPORT_PREVIEW_MATCH_XML_ID' : 'IBIMPORT_PREVIEW_MATCH_CODE', ['#ID#' => $r['target_id']]);
         } else {
             $matchText = GetMessage($r['match_by'] === null ? 'IBIMPORT_PREVIEW_MATCH_NO_KEY' : 'IBIMPORT_PREVIEW_MATCH_NONE');
+        }
+        // Найденная запись — ссылкой на её страницу редактирования (штатные CIBlock::GetAdmin*EditLink), чтобы можно было проверить глазами.
+        $foundHtml = '';
+        if ($r['target_id'] !== null) {
+            $editUrl = $r['kind'] === 'section'
+                ? CIBlock::GetAdminSectionEditLink($iblockId, $r['target_id'])
+                : CIBlock::GetAdminElementEditLink($iblockId, $r['target_id']);
+            $foundHtml = '<a href="' . htmlspecialcharsbx($editUrl) . '" target="_blank">[' . (int)$r['target_id'] . '] ' . htmlspecialcharsbx($r['target_name']) . '</a>';
+        }
+        $noteHtml = '';
+        if ($r['flags']) {
+            $suspicious++;
+            $noteHtml = '<span class="errortext">' . htmlspecialcharsbx(implode('; ', array_map(
+                static fn(string $flag): string => GetMessage('IBIMPORT_PREVIEW_FLAG_' . strtoupper($flag)),
+                $r['flags']
+            ))) . '</span>';
         }
         $row = &$previewList->AddRow($n + 1, $r);
         $row->AddViewField('KIND', htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_KIND_' . strtoupper($r['kind']))));
@@ -168,13 +188,15 @@ $tabControl = new CAdminTabControl('tabControl', [
         $row->AddViewField('FILES', (int)$r['files']);
         $row->AddViewField('PROPS', (int)$r['props']);
         $row->AddViewField('MATCH', htmlspecialcharsbx($matchText));
+        $row->AddViewField('FOUND', $foundHtml);
+        $row->AddViewField('NOTE', $noteHtml);
         $row->AddViewField('ACTION', htmlspecialcharsbx(GetMessage('IBIMPORT_PREVIEW_ACTION_' . strtoupper($r['action']))));
         unset($row);
     }
     ?>
     <div class="vibx-list-heading"><?= GetMessage('IBIMPORT_PREVIEW_HEADING') ?></div>
-    <?php if ($matchByXmlId): ?>
-        <?php AdminMessages::showErrors([GetMessage('IBIMPORT_MATCH_BY_XML_ID_RISK')]); ?>
+    <?php if ($suspicious > 0): ?>
+        <?php AdminMessages::showErrors([GetMessage('IBIMPORT_PREVIEW_SUSPICIOUS', ['#COUNT#' => $suspicious])]); ?>
     <?php endif; ?>
     <div style="color:#888;font-size:11px;margin-bottom:6px;"><?= GetMessage('IBIMPORT_PREVIEW_HINT') ?></div>
     <?php if ($preview['truncated']): ?>
