@@ -4,10 +4,7 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_b
 
 use Bitrix\Main\Loader;
 use Vspace\Ibexport\Admin\AdminMessages;
-use Vspace\Ibexport\Exporter;
-use Vspace\Ibexport\IblockListProvider;
-use Vspace\Ibexport\Options;
-use Vspace\Ibexport\Rights;
+use Vspace\Ibexport\Admin\ExportPageController;
 
 Loader::includeModule('vspace.ibexport');
 Loader::includeModule('iblock');
@@ -17,72 +14,20 @@ IncludeModuleLangFile(__FILE__);
 $APPLICATION->SetTitle(GetMessage('IBEXPORT_EXPORT_TITLE'));
 $APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
-global $USER, $APPLICATION;
-
-$errors = [];
-$estimate = null;
-
-$iblockId = (int)($_REQUEST['IBLOCK_ID'] ?? 0);
-$entityType = in_array($_REQUEST['ENTITY_TYPE'] ?? '', ['element', 'section'], true) ? $_REQUEST['ENTITY_TYPE'] : 'element';
-$entityRef = trim((string)($_REQUEST['ENTITY_REF'] ?? ''));
-$mode = in_array($_REQUEST['MODE'] ?? '', ['section_single', 'section_tree'], true) ? $_REQUEST['MODE'] : 'section_single';
-$step = $_REQUEST['STEP'] ?? '';
-// Снятый чекбокс браузер вообще не передаёт в POST — isset() тут не отличит
-// "форму ещё не отправляли" от "пользователь снял галку" (см. тот же фикс
-// в admin/import.php). Различаем по факту отправки формы (наличию STEP).
-$withFiles = $step !== '' ? (($_REQUEST['WITH_FILES'] ?? '') === 'Y') : Options::getDefaultWithFiles();
-$activeOnly = $step !== '' ? (($_REQUEST['ACTIVE_ONLY'] ?? '') === 'Y') : Options::getDefaultActiveOnly();
-
-// Инфоблоки, из которых текущий пользователь может выгружать данные (раздел 10 ТЗ).
-$iblocksList = IblockListProvider::getAvailable(Rights::canExport(...));
-
-if ($step === 'estimate' || $step === 'run') {
-    try {
-        if ($iblockId <= 0) {
-            throw new Exception(GetMessage('IBEXPORT_ERR_NO_IBLOCK'));
-        }
-        if (!Rights::canExport($iblockId)) {
-            throw new Exception(GetMessage('IBEXPORT_ERR_NO_RIGHTS'));
-        }
-        if ($entityRef === '') {
-            throw new Exception(GetMessage('IBEXPORT_ERR_NO_ID'));
-        }
-
-        if ($entityType === 'element') {
-            $entityId = Exporter::resolveElementId($iblockId, $entityRef);
-            if (!$entityId) {
-                throw new Exception(GetMessage('IBEXPORT_ERR_ELEMENT_NOT_FOUND'));
-            }
-            $mode = 'element';
-        } else {
-            $entityId = Exporter::resolveSectionId($iblockId, $entityRef);
-            if (!$entityId) {
-                throw new Exception(GetMessage('IBEXPORT_ERR_SECTION_NOT_FOUND'));
-            }
-        }
-
-        $params = [
-            'IBLOCK_ID' => $iblockId,
-            'ENTITY_TYPE' => $entityType,
-            'ENTITY_ID' => $entityId,
-            'MODE' => $mode,
-            'WITH_FILES' => $withFiles,
-            'ACTIVE_ONLY' => $activeOnly,
-        ];
-
-        if ($step === 'estimate') {
-            $estimate = Exporter::estimate($params);
-        } else { // STEP=run — фактический запуск экспорта
-            if (!check_bitrix_sessid()) {
-                throw new Exception(GetMessage('IBEXPORT_ERR_SESSID'));
-            }
-            $jobId = Exporter::createJob($params);
-            LocalRedirect('/bitrix/admin/vspace_ibexport_progress.php?lang=' . LANGUAGE_ID . '&JOB_ID=' . $jobId);
-        }
-    } catch (\Throwable $e) {
-        $errors[] = $e->getMessage();
-    }
-}
+// Разбор запроса, валидация, права, расчёт объёма и запуск экспорта — в контроллере;
+// он же делает редирект на страницу прогресса при STEP=run. Здесь — только вёрстка.
+$page = (new ExportPageController())->handle(\Bitrix\Main\Context::getCurrent()->getRequest());
+[
+    'errors' => $errors,
+    'estimate' => $estimate,
+    'iblocks' => $iblocksList,
+    'iblockId' => $iblockId,
+    'entityType' => $entityType,
+    'entityRef' => $entityRef,
+    'mode' => $mode,
+    'withFiles' => $withFiles,
+    'activeOnly' => $activeOnly,
+] = $page;
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 

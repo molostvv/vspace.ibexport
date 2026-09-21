@@ -109,7 +109,13 @@
   пользователю (`CIBlock::GetList` + проверка права колбэком), общий для
   страниц экспорта и импорта. `lib/Admin/AdminMessages.php` — единый вывод
   сообщений админки через штатный `CAdminMessage`.
-- `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`).
+- `lib/Admin/ExportPageController.php` / `ImportPageController.php` — обработка
+  запроса страниц экспорта и импорта (`handle(HttpRequest): array`): разбор
+  параметров, валидация, права, шаги `estimate`/`run` и
+  `validate`/`disk_list`/`disk_import`/`run`, редирект на страницу прогресса.
+  HTML не формируют — возвращают данные для отрисовки формы.
+- `admin/` — страницы админки (`CAdminTabControl`, `CAdminList`); `export.php`
+  и `import.php` — тонкие обёртки: контроллер + вёрстка формы.
   `admin/css/vibx.css` — общие стили страниц модуля (`.vibx-note` и др.),
   подключаются штатным `$APPLICATION->SetAdditionalCSS()`.
 

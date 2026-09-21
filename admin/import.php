@@ -4,13 +4,8 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_b
 
 use Bitrix\Main\Loader;
 use Vspace\Ibexport\Admin\AdminMessages;
-use Vspace\Ibexport\Exporter;
-use Vspace\Ibexport\IblockListProvider;
-use Vspace\Ibexport\Importer;
+use Vspace\Ibexport\Admin\ImportPageController;
 use Vspace\Ibexport\Options;
-use Vspace\Ibexport\Rights;
-use Vspace\Ibexport\YandexDisk\Exception;
-use Vspace\Ibexport\YandexDisk\ImportSource;
 use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
@@ -21,84 +16,19 @@ IncludeModuleLangFile(__FILE__);
 $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
 $APPLICATION->SetAdditionalCSS('/local/modules/vspace.ibexport/admin/css/vibx.css');
 
-global $USER, $APPLICATION;
-
-$errors = [];
-$prepared = null; // результат Importer::prepareUpload()/ImportSource::prepareFromDisk() либо восстановленный из скрытых полей формы
-$diskFiles = null; // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске
-
-$iblockId = (int)($_REQUEST['IBLOCK_ID'] ?? 0);
-$parentSectionRef = trim((string)($_REQUEST['PARENT_SECTION_REF'] ?? ''));
-$step = $_REQUEST['STEP'] ?? '';
-// Снятый чекбокс браузер вообще не передаёт в POST — isset() тут не отличит
-// "форму ещё не отправляли" от "пользователь снял галку". Различаем по
-// факту отправки формы (наличию STEP): при первом заходе — значение по
-// умолчанию, при реальном сабмите — ровно то, что пришло (отсутствие ключа
-// после отправки формы означает "снято").
-$updateByCode = $step !== '' ? (($_REQUEST['UPDATE_BY_CODE'] ?? '') === 'Y') : Options::getDefaultUpdateByCode();
-
-// Инфоблоки, в которые текущий пользователь может импортировать данные.
-$iblocksList = IblockListProvider::getAvailable(Rights::canImport(...));
-
-if (in_array($step, ['validate', 'run', 'disk_list', 'disk_import'], true)) {
-    try {
-        if ($iblockId <= 0) {
-            throw new \Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
-        }
-        if (!Rights::canImport($iblockId)) {
-            throw new \Exception(GetMessage('IBIMPORT_ERR_NO_RIGHTS'));
-        }
-
-        if ($step === 'validate') {
-            $prepared = Importer::prepareUpload($_FILES['ARCHIVE'] ?? []);
-        } elseif ($step === 'disk_list') {
-            // Отдельный, полностью ручной шаг (ТЗ "Экспорт в Яндекс.Диск",
-            // раздел 3) — недоступность Диска здесь не мешает обычной
-            // ручной загрузке архива веткой STEP=validate выше.
-            try {
-                $diskFiles = ImportSource::listDiskFiles();
-            } catch (Exception $e) {
-                $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
-            }
-        } elseif ($step === 'disk_import') {
-            $diskPath = (string)($_REQUEST['DISK_PATH'] ?? '');
-            if ($diskPath === '') {
-                throw new \Exception(GetMessage('IBYADISK_ERR_NO_PATH'));
-            }
-            try {
-                $prepared = ImportSource::prepareFromDisk($diskPath);
-            } catch (Exception $e) {
-                throw new \Exception(GetMessage('IBYADISK_DOWNLOAD_ERROR', ['#MESSAGE#' => $e->getMessage()]));
-            }
-        } else { // STEP=run — уже провалидированный на предыдущем шаге архив
-            if (!check_bitrix_sessid()) {
-                throw new \Exception(GetMessage('IBIMPORT_ERR_SESSID'));
-            }
-
-            $tmpDirName = (string)($_REQUEST['TMP_DIR'] ?? '');
-            Importer::resolveTmpDir($tmpDirName); // бросит исключение, если архив не найден/устарел
-
-            $parentSectionId = 0;
-            if ($parentSectionRef !== '') {
-                $parentSectionId = Exporter::resolveSectionId($iblockId, $parentSectionRef);
-                if (!$parentSectionId) {
-                    throw new \Exception(GetMessage('IBIMPORT_ERR_PARENT_NOT_FOUND'));
-                }
-            }
-
-            $jobId = Importer::createJob([
-                'TARGET_IBLOCK_ID' => $iblockId,
-                'PARENT_SECTION_ID' => $parentSectionId,
-                'UPDATE_BY_CODE' => $updateByCode,
-                'TMP_DIR' => $tmpDirName,
-                'SOURCE_FILE_NAME' => (string)($_REQUEST['SOURCE_FILE_NAME'] ?? ''),
-            ]);
-            LocalRedirect('/bitrix/admin/vspace_ibexport_import_progress.php?lang=' . LANGUAGE_ID . '&JOB_ID=' . $jobId);
-        }
-    } catch (\Throwable $e) {
-        $errors[] = $e->getMessage();
-    }
-}
+// Разбор запроса, валидация, права и шаги validate/disk_list/disk_import/run — в
+// контроллере; он же делает редирект на страницу прогресса при STEP=run. Здесь —
+// только вёрстка.
+$page = (new ImportPageController())->handle(\Bitrix\Main\Context::getCurrent()->getRequest());
+[
+    'errors' => $errors,
+    'prepared' => $prepared, // результат Importer::prepareUpload()/ImportSource::prepareFromDisk() либо null
+    'diskFiles' => $diskFiles, // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске, либо null
+    'iblocks' => $iblocksList,
+    'iblockId' => $iblockId,
+    'parentSectionRef' => $parentSectionRef,
+    'updateByCode' => $updateByCode,
+] = $page;
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 

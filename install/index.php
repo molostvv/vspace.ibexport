@@ -174,6 +174,8 @@ class vspace_ibexport extends CModule
             'Vspace\\Ibexport\\JobEventLog' => 'lib/JobEventLog.php',
             'Vspace\\Ibexport\\IblockListProvider' => 'lib/IblockListProvider.php',
             'Vspace\\Ibexport\\Admin\\AdminMessages' => 'lib/Admin/AdminMessages.php',
+            'Vspace\\Ibexport\\Admin\\ExportPageController' => 'lib/Admin/ExportPageController.php',
+            'Vspace\\Ibexport\\Admin\\ImportPageController' => 'lib/Admin/ImportPageController.php',
             'Vspace\\Ibexport\\WalkResult' => 'lib/WalkResult.php',
             'Vspace\\Ibexport\\TraversalFrame' => 'lib/TraversalFrame.php',
             'Vspace\\Ibexport\\Export\\ExportFrame' => 'lib/Export/ExportFrame.php',
