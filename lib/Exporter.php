@@ -4,13 +4,16 @@ namespace Vspace\Ibexport;
 
 use Bitrix\Iblock\ElementTable;
 use Bitrix\Iblock\SectionTable;
+use Bitrix\Main\IO\Directory;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Vspace\Ibexport\Export\BitrixTreeSource;
 use Vspace\Ibexport\Export\ExportStep;
 use Vspace\Ibexport\Export\TreeSourceInterface;
 
 Loader::includeModule('iblock');
+Loc::loadMessages(__FILE__);
 
 /**
  * Движок экспорта (раздел 3 ТЗ) — единая точка входа, которой пользуется и
@@ -103,6 +106,9 @@ class Exporter
 
         $est = self::estimate($params);
 
+        $tmpDirName = TmpStorage::create(TmpStorage::PREFIX_EXPORT);
+        Directory::createDirectory(TmpStorage::getPath($tmpDirName) . '/files');
+
         $id = JobTable::add([
             'USER_ID' => (int)$USER->GetID(),
             'IBLOCK_ID' => (int)$params['IBLOCK_ID'],
@@ -115,10 +121,8 @@ class Exporter
             'STAGE' => 'init',
             'TOTAL_SECTIONS' => $est['sections'],
             'TOTAL_ELEMENTS' => $est['elements'],
-            'TMP_DIR' => 'job_' . uniqid(),
+            'TMP_DIR' => $tmpDirName,
         ])->getId();
-
-        self::ensureTmpDir($id);
 
         if (($est['sections'] + $est['elements']) > Options::getSyncThreshold()) {
             self::runner()->scheduleAgent($id);
@@ -153,7 +157,7 @@ class Exporter
             JobTable::class,
             self::class,
             $eventLog,
-            'Задание экспорта не найдено.',
+            Loc::getMessage('IBX_EXPORTER_JOB_NOT_FOUND'),
             (new ExportStep($eventLog))->run(...),
             static fn(array $job): array => [
                 'archive_file' => $job['ARCHIVE_FILE'],
@@ -171,50 +175,32 @@ class Exporter
         return JobTable::getTmpPath(JobTable::getJobById($jobId));
     }
 
-    private static function ensureTmpDir(int $jobId): void
-    {
-        $dir = self::getTmpDir($jobId);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        if (!is_dir($dir . '/files')) {
-            mkdir($dir . '/files', 0755, true);
-        }
-    }
-
-    /** Постоянный агент CAgent: удаляет просроченные каталоги и записи заданий (раздел 8). */
+    /**
+     * Постоянный агент CAgent (раздел 8): брошенные незавершённые задания переводит в ошибку, удаляет
+     * просроченные задания с их каталогами и каталоги выгрузок, на которые не ссылается ни одно задание.
+     */
     public static function cleanupAgent(): string
     {
+        $ttlHours = Options::getTtlHours();
+        JobTable::failAbandoned($ttlHours);
+
         $rows = JobTable::getList([
             'filter' => ['<DATE_EXPIRE' => new DateTime()],
             'select' => ['ID', 'TMP_DIR'],
             'limit' => 200,
         ]);
-
         while ($row = $rows->fetch()) {
-            $dir = JobTable::getTmpPath($row);
-            if (is_dir($dir)) {
-                self::rrmdir($dir);
-            }
+            TmpStorage::delete((string)$row['TMP_DIR']);
             JobTable::delete($row['ID']);
         }
 
-        return '\\Vspace\\Ibexport\\Exporter::cleanupAgent();';
-    }
+        TmpStorage::deleteOrphans(
+            TmpStorage::PREFIX_EXPORT,
+            time() - $ttlHours * 3600,
+            static fn(string $name): bool => (bool)JobTable::getList(['filter' => ['=TMP_DIR' => $name], 'select' => ['ID'], 'limit' => 1])->fetch()
+        );
+        TmpStorage::deleteLegacy();
 
-    private static function rrmdir(string $dir): void
-    {
-        foreach (scandir($dir) as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $item;
-            if (is_dir($path)) {
-                self::rrmdir($path);
-            } else {
-                @unlink($path);
-            }
-        }
-        @rmdir($dir);
+        return '\\Vspace\\Ibexport\\Exporter::cleanupAgent();';
     }
 }

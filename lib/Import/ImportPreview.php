@@ -22,6 +22,8 @@ final class ImportPreview
     public const ACTION_CREATE = 'create';
     public const ACTION_UPDATE = 'update';
     public const ACTION_SKIP = 'skip';
+    /** Повторное вхождение элемента, который создаст его первое вхождение (элемент привязан к нескольким разделам архива). */
+    public const ACTION_LINK = 'link';
 
     public const FLAG_AMBIGUOUS = 'ambiguous';
     public const FLAG_NAME_MISMATCH = 'name_mismatch';
@@ -38,6 +40,9 @@ final class ImportPreview
 
     /** @var array<string, int> код UF-поля => у скольких показанных разделов его нет в целевом инфоблоке */
     private array $missingUserFields = [];
+
+    /** @var array<int, true> ID элементов в архиве, которые создаст импорт (их следующие вхождения только добавят привязку) */
+    private array $createdElements = [];
 
     public function __construct(private ExistingRecordFinderInterface $finder, private PropertySourceInterface $properties)
     {
@@ -60,6 +65,7 @@ final class ImportPreview
         $this->limit = $limit;
         $this->missingProps = [];
         $this->missingUserFields = [];
+        $this->createdElements = [];
 
         if ($mode === 'element') {
             foreach ($export->element as $element) {
@@ -146,6 +152,17 @@ final class ImportPreview
             $action = self::ACTION_SKIP;
         } else {
             $action = $ctx->updateByCode ? self::ACTION_UPDATE : self::ACTION_SKIP;
+        }
+
+        // Элемент, привязанный к нескольким разделам архива, встречается под каждым из них; если его создаёт первое
+        // вхождение, следующие только добавляют привязку (ElementImporter находит созданный элемент по метке TMP_ID).
+        $srcId = (int)$node['id'];
+        if ($kind === ExistingRecordFinderInterface::KIND_ELEMENT && $srcId > 0 && isset($node['main_section'])) {
+            if (isset($this->createdElements[$srcId])) {
+                $action = self::ACTION_LINK;
+            } elseif ($action === self::ACTION_CREATE) {
+                $this->createdElements[$srcId] = true;
+            }
         }
 
         if ($kind === ExistingRecordFinderInterface::KIND_SECTION) {

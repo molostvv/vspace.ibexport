@@ -109,10 +109,12 @@ final class TickRunner
 
             $job = $table::getJobById($jobId);
         } catch (\Throwable $e) {
+            // Срок хранения — как у успешного задания: иначе агент очистки не удалил бы ни запись, ни рабочий каталог.
             $table::update($jobId, [
                 'STATUS' => $table::STATUS_ERROR,
                 'ERROR_MESSAGE' => $e->getMessage(),
                 'DATE_FINISH' => new DateTime(),
+                'DATE_EXPIRE' => $table::expireDate(),
             ]);
             $this->eventLog->error($jobId, $e->getMessage());
             $job = $table::getJobById($jobId);

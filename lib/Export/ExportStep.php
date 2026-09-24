@@ -17,6 +17,13 @@ use Vspace\Ibexport\XmlStreamWriter;
  */
 final class ExportStep
 {
+    /**
+     * Версия формата export.xml (атрибут version корня; docs/xml-format.md). 2 — с версии модуля 1.1.0: значения
+     * без HTML-экранирования, даты в ISO 8601, ключи связанных записей у свойств-привязок, описания значений,
+     * main_section у элементов. В архивах прежних версий атрибута нет.
+     */
+    public const FORMAT_VERSION = 2;
+
     public function __construct(private JobEventLog $eventLog)
     {
     }
@@ -45,6 +52,7 @@ final class ExportStep
         $w = new XmlStreamWriter($handle);
         $w->raw('<?xml version="1.0" encoding="UTF-8"?>' . "\n");
         $w->openTag('export', [
+            'version' => self::FORMAT_VERSION,
             'date' => (new DateTime())->format('c'),
             'mode' => 'element',
             'iblock_id' => $job['IBLOCK_ID'],
@@ -75,6 +83,7 @@ final class ExportStep
             $w = new XmlStreamWriter($handle);
             $w->raw('<?xml version="1.0" encoding="UTF-8"?>' . "\n");
             $w->openTag('export', [
+                'version' => self::FORMAT_VERSION,
                 'date' => (new DateTime())->format('c'),
                 'mode' => $recursive ? 'section_tree' : 'section_single',
                 'iblock_id' => $ctx->iblockId,
@@ -130,15 +139,13 @@ final class ExportStep
         $jobId = (int)$job['ID'];
         $archive = (new ArchiveBuilder())->build($job, $tmpDir);
 
-        $ttl = Options::getTtlHours();
-
         JobTable::update($jobId, [
             'STATUS' => JobTable::STATUS_DONE,
             'STAGE' => 'done',
             'ARCHIVE_FILE' => $archive['name'],
             'ARCHIVE_SIZE' => $archive['size'],
             'DATE_FINISH' => new DateTime(),
-            'DATE_EXPIRE' => DateTime::createFromTimestamp(time() + $ttl * 3600),
+            'DATE_EXPIRE' => JobTable::expireDate(),
         ]);
 
         $this->eventLog->done($jobId);

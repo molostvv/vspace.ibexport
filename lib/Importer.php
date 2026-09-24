@@ -3,8 +3,10 @@
 namespace Vspace\Ibexport;
 
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use SimpleXMLElement;
+use Vspace\Ibexport\Import\ArchiveFileRef;
 use Vspace\Ibexport\Import\BitrixExistingRecordFinder;
 use Vspace\Ibexport\Import\BitrixPropertySource;
 use Vspace\Ibexport\Import\ImportContext;
@@ -12,6 +14,7 @@ use Vspace\Ibexport\Import\ImportPreview;
 use Vspace\Ibexport\Import\ImportStep;
 
 Loader::includeModule('iblock');
+Loc::loadMessages(__FILE__);
 
 /**
  * Движок импорта — обратная операция к Exporter (см. lib/Exporter.php).
@@ -40,6 +43,9 @@ Loader::includeModule('iblock');
  */
 class Importer
 {
+    /** Сколько имён записей архива показывать в сообщении "в архиве нет export.xml". */
+    private const DIAGNOSTIC_NAMES = 10;
+
     /**
      * Принимает загруженный файл ($_FILES['ARCHIVE']), распаковывает во
      * временный каталог и считает объём — до создания задания (шаг
@@ -49,21 +55,21 @@ class Importer
     public static function prepareUpload(array $file): array
     {
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw new \Exception('Файл не был загружен (код ошибки ' . ($file['error'] ?? '?') . ').');
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_UPLOAD_ERROR', ['#CODE#' => $file['error'] ?? '?']));
         }
 
-        $tmpDirName = 'import_' . uniqid();
-        $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $tmpDirName;
-        if (!is_dir($tmpDir) && !mkdir($tmpDir, 0755, true) && !is_dir($tmpDir)) {
-            throw new \Exception('Не удалось создать временный каталог для импорта.');
-        }
+        $tmpDirName = TmpStorage::create(TmpStorage::PREFIX_IMPORT);
+        try {
+            $zipPath = TmpStorage::getPath($tmpDirName) . '/upload.zip';
+            if (!move_uploaded_file($file['tmp_name'], $zipPath)) {
+                throw new \Exception(Loc::getMessage('IBX_IMPORTER_SAVE_FAILED'));
+            }
 
-        $zipPath = $tmpDir . '/upload.zip';
-        if (!move_uploaded_file($file['tmp_name'], $zipPath)) {
-            throw new \Exception('Не удалось сохранить загруженный файл.');
+            return self::extractAndValidate($zipPath, TmpStorage::getPath($tmpDirName), $tmpDirName, (string)($file['name'] ?? 'export.zip'));
+        } catch (\Throwable $e) {
+            TmpStorage::delete($tmpDirName);
+            throw $e;
         }
-
-        return self::extractAndValidate($zipPath, $tmpDir, $tmpDirName, (string)($file['name'] ?? 'export.zip'));
     }
 
     /**
@@ -71,37 +77,51 @@ class Importer
      * распаковка уже сохранённого на диске ZIP и проверка/подсчёт export.xml.
      * Публичный (а не private), т.к. используется из другого класса —
      * см. lib/YandexDisk/ImportSource.php.
+     *
+     * Распаковываются только export.xml и файлы из files/ (Import\ArchiveFileRef): архив приходит от
+     * пользователя, и прочее его содержимое (скрипты, HTML, вложенные каталоги) на диск не попадает —
+     * такие записи только считаются (ignored_entries), чтобы страница импорта могла о них сообщить.
      */
     public static function extractAndValidate(string $zipPath, string $tmpDir, string $tmpDirName, string $sourceFileName): array
     {
         $zip = new \ZipArchive();
         $openResult = $zip->open($zipPath);
         if ($openResult !== true) {
-            throw new \Exception('Файл не является корректным ZIP-архивом (код ошибки ' . $openResult . ').');
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_NOT_ZIP', ['#CODE#' => $openResult]));
         }
 
+        $entries = [];
+        $names = [];
+        $ignored = 0;
         $entryCount = $zip->numFiles;
-        if (!$zip->extractTo($tmpDir)) {
+        for ($i = 0; $i < $entryCount; $i++) {
+            $name = (string)$zip->getNameIndex($i);
+            $names[] = $name;
+            if (ArchiveFileRef::isExtractable($name)) {
+                $entries[] = $name;
+            } elseif (!str_ends_with($name, '/')) { // записи-каталоги (например, "files/") не в счёт
+                $ignored++;
+            }
+        }
+
+        if (!in_array(ArchiveFileRef::XML_FILE, $entries, true)) {
             $zip->close();
-            throw new \Exception('Не удалось распаковать архив во временный каталог — проверьте права на запись в ' . VSPACE_IBEXPORT_TMP_DIR . '.');
+            // Диагностика: без неё "export.xml не найден" неотличимо от "архив не тот" —
+            // при расследовании нужно видеть, что реально лежит в архиве.
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_NO_XML', [
+                '#COUNT#' => $entryCount,
+                '#NAMES#' => $names ? implode(', ', array_slice($names, 0, self::DIAGNOSTIC_NAMES)) . (count($names) > self::DIAGNOSTIC_NAMES ? ', …' : '') : '—',
+            ]));
+        }
+
+        if (!$zip->extractTo($tmpDir, $entries)) {
+            $zip->close();
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_EXTRACT_FAILED', ['#PATH#' => TmpStorage::getRoot()]));
         }
         $zip->close();
         @unlink($zipPath);
 
-        $xmlPath = $tmpDir . '/export.xml';
-        if (!is_file($xmlPath)) {
-            // Диагностика: без неё "export.xml не найден" неотличимо от
-            // "архив не тот" и от "распаковка тихо не удалась" — при
-            // расследовании нужно видеть, что реально оказалось на диске.
-            $found = array_values(array_diff(scandir($tmpDir) ?: [], ['.', '..']));
-            throw new \Exception(
-                'В архиве не найден export.xml — это не выгрузка модуля "Экспорт инфоблоков". '
-                . 'Записей в архиве: ' . $entryCount . '. '
-                . 'После распаковки на диске: ' . ($found ? implode(', ', $found) : '(ничего)') . '.'
-            );
-        }
-
-        return self::describeExtracted($tmpDir, $tmpDirName, $sourceFileName);
+        return self::describeExtracted($tmpDir, $tmpDirName, $sourceFileName) + ['ignored_entries' => $ignored];
     }
 
     /**
@@ -113,17 +133,14 @@ class Importer
         return self::describeExtracted(self::resolveTmpDir($tmpDirName), $tmpDirName, $sourceFileName);
     }
 
-    /** Разбор распакованного export.xml: режим и объём. */
+    /** Разбор распакованного export.xml: режим, объём и версия формата (0 — архив версии модуля до 1.1.0). */
     private static function describeExtracted(string $tmpDir, string $tmpDirName, string $sourceFileName): array
     {
-        $xml = @simplexml_load_file($tmpDir . '/export.xml');
-        if ($xml === false) {
-            throw new \Exception('Не удалось разобрать export.xml — файл повреждён.');
-        }
+        $xml = self::loadXml($tmpDir);
 
         $mode = (string)$xml['mode'];
         if (!in_array($mode, ['element', 'section_single', 'section_tree'], true)) {
-            throw new \Exception('Неизвестный режим выгрузки в export.xml: "' . $mode . '".');
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_BAD_MODE', ['#MODE#' => $mode]));
         }
 
         $counts = self::countTree($xml, $mode);
@@ -135,6 +152,7 @@ class Importer
             'sections' => $counts['sections'],
             'elements' => $counts['elements'],
             'source_file_name' => $sourceFileName !== '' ? $sourceFileName : 'export.zip',
+            'format_version' => (int)$xml['version'],
         ];
     }
 
@@ -147,10 +165,20 @@ class Importer
     public static function preview(string $tmpDirName, int $iblockId, bool $updateByCode, bool $matchByXmlId): array
     {
         $tmpDir = self::resolveTmpDir($tmpDirName);
-        $xml = simplexml_load_file($tmpDir . '/export.xml');
+        $xml = self::loadXml($tmpDir);
 
         return (new ImportPreview(new BitrixExistingRecordFinder(), new BitrixPropertySource()))
             ->build($xml, (string)$xml['mode'], new ImportContext($iblockId, $updateByCode, $tmpDir, $matchByXmlId));
+    }
+
+    private static function loadXml(string $tmpDir): SimpleXMLElement
+    {
+        $xml = @simplexml_load_file($tmpDir . '/' . ArchiveFileRef::XML_FILE);
+        if ($xml === false) {
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_BAD_XML'));
+        }
+
+        return $xml;
     }
 
     private static function countTree(SimpleXMLElement $export, string $mode): array
@@ -188,13 +216,13 @@ class Importer
      */
     public static function resolveTmpDir(string $tmpDirName): string
     {
-        if (!preg_match('~^import_[a-z0-9.]+$~i', $tmpDirName)) {
-            throw new \Exception('Некорректный идентификатор загруженного архива, загрузите файл заново.');
+        if (!TmpStorage::isValidName($tmpDirName, TmpStorage::PREFIX_IMPORT)) {
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_BAD_TMP_DIR'));
         }
 
-        $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $tmpDirName;
-        if (!is_file($tmpDir . '/export.xml')) {
-            throw new \Exception('Загруженный архив не найден (истёк срок хранения?), загрузите файл заново.');
+        $tmpDir = TmpStorage::getPath($tmpDirName);
+        if (!is_file($tmpDir . '/' . ArchiveFileRef::XML_FILE)) {
+            throw new \Exception(Loc::getMessage('IBX_IMPORTER_TMP_DIR_GONE'));
         }
 
         return $tmpDir;
@@ -208,7 +236,7 @@ class Importer
         global $USER;
 
         $tmpDir = self::resolveTmpDir($params['TMP_DIR']);
-        $xml = simplexml_load_file($tmpDir . '/export.xml');
+        $xml = self::loadXml($tmpDir);
         $mode = (string)$xml['mode'];
         $counts = self::countTree($xml, $mode);
 
@@ -256,7 +284,7 @@ class Importer
             ImportJobTable::class,
             self::class,
             $eventLog,
-            'Задание импорта не найдено.',
+            Loc::getMessage('IBX_IMPORTER_JOB_NOT_FOUND'),
             (new ImportStep($eventLog))->run(...),
             static fn(array $job): array => [
                 'created_count' => (int)$job['CREATED_COUNT'],
@@ -270,60 +298,32 @@ class Importer
     // временные файлы
     // ---------------------------------------------------------------
 
-    /** Постоянный агент CAgent: удаляет просроченные каталоги и записи заданий импорта, включая "провалидированные, но не запущенные" (без задания). */
+    /**
+     * Постоянный агент CAgent: брошенные незавершённые задания переводит в ошибку, удаляет просроченные
+     * задания импорта с их каталогами и каталоги "проверенных, но не запущенных" архивов (без задания).
+     */
     public static function cleanupAgent(): string
     {
+        $ttlHours = Options::getTtlHours();
+        ImportJobTable::failAbandoned($ttlHours);
+
         $rows = ImportJobTable::getList([
             'filter' => ['<DATE_EXPIRE' => new DateTime()],
             'select' => ['ID', 'TMP_DIR'],
             'limit' => 200,
         ]);
-
-        $knownDirs = [];
         while ($row = $rows->fetch()) {
-            $knownDirs[$row['TMP_DIR']] = true;
-            $dir = ImportJobTable::getTmpPath($row);
-            if (is_dir($dir)) {
-                self::rrmdir($dir);
-            }
+            TmpStorage::delete((string)$row['TMP_DIR']);
             ImportJobTable::delete($row['ID']);
         }
 
-        // каталоги, созданные prepareUpload() на шаге "Проверить архив", для
-        // которых пользователь так и не запустил импорт (задания нет вовсе)
-        $base = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR;
-        if (is_dir($base)) {
-            $staleBefore = time() - Options::getTtlHours() * 3600;
-            foreach (scandir($base) as $entry) {
-                if (strpos($entry, 'import_') !== 0 || isset($knownDirs[$entry])) {
-                    continue;
-                }
-                $dir = $base . '/' . $entry;
-                if (is_dir($dir) && filemtime($dir) < $staleBefore) {
-                    $stillUsed = ImportJobTable::getList(['filter' => ['TMP_DIR' => $entry], 'select' => ['ID'], 'limit' => 1])->fetch();
-                    if (!$stillUsed) {
-                        self::rrmdir($dir);
-                    }
-                }
-            }
-        }
+        TmpStorage::deleteOrphans(
+            TmpStorage::PREFIX_IMPORT,
+            time() - $ttlHours * 3600,
+            static fn(string $name): bool => (bool)ImportJobTable::getList(['filter' => ['=TMP_DIR' => $name], 'select' => ['ID'], 'limit' => 1])->fetch()
+        );
+        TmpStorage::deleteLegacy();
 
         return '\\Vspace\\Ibexport\\Importer::cleanupAgent();';
-    }
-
-    private static function rrmdir(string $dir): void
-    {
-        foreach (scandir($dir) as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $item;
-            if (is_dir($path)) {
-                self::rrmdir($path);
-            } else {
-                @unlink($path);
-            }
-        }
-        @rmdir($dir);
     }
 }

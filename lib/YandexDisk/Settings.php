@@ -3,7 +3,10 @@
 namespace Vspace\Ibexport\YandexDisk;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Localization\Loc;
 use Vspace\Ibexport\Options;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Хранение токена и папки обмена для интеграции с Яндекс.Диском. Флаг
@@ -63,7 +66,7 @@ class Settings
         }
         $key = self::getCryptoKey();
         if ($key === '') {
-            throw new \Exception('В bitrix/.settings.php не задан crypto[crypto_key] — сохранение токена невозможно.');
+            throw new \Exception(Loc::getMessage('IBX_YADISK_SETTINGS_NO_CRYPTO_KEY'));
         }
         $cipher = new \Bitrix\Main\Security\Cipher();
         Option::set(Options::MODULE_ID, 'YANDEX_DISK_TOKEN', base64_encode($cipher->encrypt($token, $key)));

@@ -2,7 +2,10 @@
 
 namespace Vspace\Ibexport\Import;
 
+use Bitrix\Main\Localization\Loc;
 use SimpleXMLElement;
+
+Loc::loadMessages(__FILE__);
 
 /** Общее для импортёров разделов и элементов: чтение атрибутов узла, поиск существующей записи по CODE, файловые поля. */
 abstract class AbstractNodeImporter
@@ -36,7 +39,9 @@ abstract class AbstractNodeImporter
     /** Подпись ключа сопоставления для текста предупреждений: "код news" / "XML_ID 1715". */
     protected static function matchLabel(array $match): string
     {
-        return isset($match['CODE']) ? 'код ' . $match['CODE'] : 'XML_ID ' . $match['XML_ID'];
+        return isset($match['CODE'])
+            ? Loc::getMessage('IBX_NODE_MATCH_CODE', ['#VALUE#' => $match['CODE']])
+            : Loc::getMessage('IBX_NODE_MATCH_XML_ID', ['#VALUE#' => $match['XML_ID']]);
     }
 
     /**
@@ -82,22 +87,34 @@ abstract class AbstractNodeImporter
         return ['id' => $rows ? (int)$rows[0]['ID'] : null, 'ambiguous' => count($rows) > 1];
     }
 
-    /** Прямые файловые поля (PICTURE/PREVIEW_PICTURE/DETAIL_PICTURE) — самозакрывающийся тег с атрибутом file_ref. */
+    /**
+     * Прямые файловые поля (PICTURE/PREVIEW_PICTURE/DETAIL_PICTURE) — самозакрывающийся тег с атрибутом file_ref.
+     * Ссылка принимается только на files/… внутри архива (ArchiveFileRef) — иначе поддельный export.xml
+     * мог бы указать на произвольный файл сервера.
+     */
     protected function applyFileField(array &$fields, string $fieldName, SimpleXMLElement $node, ImportContext $ctx, ImportReport $report): void
     {
         $fileRef = (string)$node['file_ref'];
         if ($fileRef === '') {
             return; // файлы не выгружались либо исходный файл отсутствовал — не трогаем поле
         }
+        if (!ArchiveFileRef::isValid($fileRef)) {
+            $report->addWarning(Loc::getMessage('IBX_NODE_BAD_FILE_REF', ['#REF#' => $fileRef, '#FIELD#' => $fieldName]));
+            return;
+        }
 
-        $absPath = $ctx->tmpDir . '/' . $fileRef;
+        $absPath = ArchiveFileRef::path($ctx->tmpDir, $fileRef);
         if (!is_file($absPath)) {
-            $report->addWarning('Файл "' . $fileRef . '" не найден в архиве, поле ' . $fieldName . ' пропущено.');
+            $report->addWarning(Loc::getMessage('IBX_NODE_NO_FILE', ['#REF#' => $fileRef, '#FIELD#' => $fieldName]));
             return;
         }
 
         $fileArr = $this->files->make($absPath);
         if ($fileArr) {
+            $description = (string)$node['description'];
+            if ($description !== '') {
+                $fileArr['description'] = $description;
+            }
             $fields[$fieldName] = $fileArr;
         }
     }

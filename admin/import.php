@@ -5,6 +5,7 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_b
 use Bitrix\Main\Loader;
 use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\Admin\ImportPageController;
+use Vspace\Ibexport\Export\ExportStep;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\YandexDisk\Settings;
 
@@ -107,6 +108,12 @@ $tabControl = new CAdminTabControl('tabControl', [
                         '#ELEMENTS#' => $prepared['elements'],
                     ]) ?>
                 </div>
+                <?php if ((int)($prepared['format_version'] ?? 0) < ExportStep::FORMAT_VERSION): ?>
+                    <div class="vibx-note errortext"><?= GetMessage('IBIMPORT_LEGACY_FORMAT') ?></div>
+                <?php endif; ?>
+                <?php if (!empty($prepared['ignored_entries'])): ?>
+                    <div class="vibx-note"><?= GetMessage('IBIMPORT_IGNORED_ENTRIES', ['#COUNT#' => (int)$prepared['ignored_entries']]) ?></div>
+                <?php endif; ?>
             </td>
         </tr>
         <input type="hidden" name="TMP_DIR" value="<?= htmlspecialcharsbx($prepared['tmp_dir']) ?>">
@@ -258,7 +265,8 @@ $tabControl = new CAdminTabControl('tabControl', [
                         <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx(vibxFormatDiskDate($file['modified'])) ?></div></td>
                         <td class="adm-list-table-cell">
                             <div class="adm-list-table-cell-inner">
-                                <form method="get" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
+                                <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
+                                    <?= bitrix_sessid_post() ?>
                                     <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
                                     <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
                                     <?php // Настройки формы выше переносим в следующий шаг: контроллер при наличии STEP читает чекбокс как "снят", если ключа нет ?>

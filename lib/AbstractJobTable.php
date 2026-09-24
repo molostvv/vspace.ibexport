@@ -3,8 +3,11 @@
 namespace Vspace\Ibexport;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Type\DateTime;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Общая основа таблиц заданий экспорта (JobTable) и импорта (ImportJobTable):
@@ -61,10 +64,47 @@ abstract class AbstractJobTable extends DataManager
         return $row ?: null;
     }
 
-    /** Абсолютный путь рабочего каталога задания (TMP_DIR — имя каталога внутри VSPACE_IBEXPORT_TMP_DIR). */
+    /** Абсолютный путь рабочего каталога задания (TMP_DIR — имя каталога в TmpStorage). */
     public static function getTmpPath(array $job): string
     {
-        return $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $job['TMP_DIR'];
+        return TmpStorage::getPath((string)$job['TMP_DIR']);
+    }
+
+    /** Когда истекает срок хранения завершённого (успешно или с ошибкой) задания — от текущего момента. */
+    public static function expireDate(): DateTime
+    {
+        return DateTime::createFromTimestamp(time() + Options::getTtlHours() * 3600);
+    }
+
+    /**
+     * Задания, которые давно не завершены и сейчас не обрабатываются (вкладку прогресса закрыли до конца
+     * небольшой выгрузки, агенты перестали запускаться и т.п.), переводятся в ошибку с обычным сроком
+     * хранения: иначе у них никогда не появится DATE_EXPIRE, и агент очистки не удалит ни запись, ни каталог.
+     * "Давно" — дольше срока хранения, но не меньше суток: живое фоновое задание за это время завершается.
+     */
+    public static function failAbandoned(int $ttlHours): void
+    {
+        $rows = static::getList([
+            'filter' => [
+                '@STATUS' => [self::STATUS_NEW, self::STATUS_RUNNING],
+                '<DATE_CREATE' => DateTime::createFromTimestamp(time() - max($ttlHours, 24) * 3600),
+            ],
+            'select' => ['ID', 'LOCKED_AT'],
+            'limit' => 200,
+        ]);
+
+        $lockedAfter = time() - Options::getTickBudgetSeconds() * 4; // та же давность блокировки, что в TickRunner::runStep()
+        while ($row = $rows->fetch()) {
+            if ((int)$row['LOCKED_AT'] >= $lockedAfter) {
+                continue; // прямо сейчас идёт тик
+            }
+            static::update($row['ID'], [
+                'STATUS' => self::STATUS_ERROR,
+                'ERROR_MESSAGE' => Loc::getMessage('IBX_JOB_ABANDONED'),
+                'DATE_FINISH' => new DateTime(),
+                'DATE_EXPIRE' => static::expireDate(),
+            ]);
+        }
     }
 
     /** Задание завершено (успешно или с ошибкой) — дальнейшие тики ему не нужны. */

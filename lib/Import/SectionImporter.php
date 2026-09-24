@@ -3,8 +3,12 @@
 namespace Vspace\Ibexport\Import;
 
 use Bitrix\Iblock\SectionTable;
+use Bitrix\Main\Localization\Loc;
 use CIBlockSection;
 use SimpleXMLElement;
+use Vspace\Ibexport\DateValue;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Создаёт либо обновляет один раздел по его XML-узлу: совпадение по CODE и
@@ -31,6 +35,11 @@ class SectionImporter extends AbstractNodeImporter
             'SORT' => self::readSort($node),
             'DESCRIPTION' => (string)$node->description,
         ];
+        // В архивах до 1.1.0 типа описания нет — тогда он не передаётся (у нового раздела будет "text").
+        $descriptionType = (string)$node->description['type'];
+        if ($descriptionType === 'html' || $descriptionType === 'text') {
+            $fields['DESCRIPTION_TYPE'] = $descriptionType;
+        }
         if ($code !== '') {
             $fields['CODE'] = $code;
         }
@@ -45,19 +54,22 @@ class SectionImporter extends AbstractNodeImporter
         $existingId = $found['id'];
         if ($found['ambiguous']) {
             // Сам раздел не обновляем, но вложенные записи надо куда-то класть — в раздел с наименьшим ID.
-            $report->addWarning('Раздел "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): в целевом инфоблоке несколько разделов с таким XML_ID, раздел не обновлён; вложенные записи помещены в раздел ID ' . $existingId . '.');
+            $report->addWarning(Loc::getMessage('IBX_SECTION_AMBIGUOUS', ['#NAME#' => $fields['NAME'], '#KEY#' => self::matchLabel($match), '#ID#' => $existingId]));
             $report->skipped++;
             return $existingId;
         }
 
         if ($existingId) {
-            if ($ctx->updateByCode) {
-                $section = new CIBlockSection();
-                if (!$section->Update($existingId, $fields)) {
-                    $report->addWarning('Раздел "' . $fields['NAME'] . '" (' . self::matchLabel($match) . '): ' . $section->LAST_ERROR);
-                }
+            if (!$ctx->updateByCode) {
+                $report->skipped++;
+                return $existingId;
+            }
+            $section = new CIBlockSection();
+            if ($section->Update($existingId, $fields)) {
                 $report->updated++;
             } else {
+                // Раздел остаётся прежним, но вложенные записи по-прежнему кладутся в него.
+                $report->addWarning(Loc::getMessage('IBX_SECTION_UPDATE_FAILED', ['#NAME#' => $fields['NAME'], '#KEY#' => self::matchLabel($match), '#ERROR#' => $section->LAST_ERROR]));
                 $report->skipped++;
             }
             return $existingId;
@@ -69,7 +81,7 @@ class SectionImporter extends AbstractNodeImporter
         $section = new CIBlockSection();
         $newId = $section->Add($fields);
         if (!$newId) {
-            throw new \Exception('Не удалось создать раздел "' . $fields['NAME'] . '": ' . $section->LAST_ERROR);
+            throw new \Exception(Loc::getMessage('IBX_SECTION_ADD_FAILED', ['#NAME#' => $fields['NAME'], '#ERROR#' => $section->LAST_ERROR]));
         }
         $report->created++;
 
@@ -104,16 +116,37 @@ class SectionImporter extends AbstractNodeImporter
         return $result;
     }
 
-    /** Поля, которых нет в целевом инфоблоке, пропускаются с предупреждением (Bitrix проигнорировал бы их молча). */
+    /** @return array<string, string> код UF-поля => его тип в исходной инсталляции (атрибут type; в архивах до 1.1.0 его нет) */
+    public static function parseUserFieldTypes(SimpleXMLElement $properties): array
+    {
+        $types = [];
+        foreach ($properties->property ?? [] as $prop) {
+            $types[(string)$prop['code']] = (string)$prop['type'];
+        }
+
+        return $types;
+    }
+
+    /**
+     * Поля, которых нет в целевом инфоблоке, пропускаются с предупреждением (Bitrix проигнорировал бы их молча).
+     * Даты (типы date/datetime) в архиве — в ISO 8601 и передаются объектами Date/DateTime (DateValue).
+     */
     private function applyUserFields(array &$fields, SimpleXMLElement $properties, int $iblockId, ImportReport $report): void
     {
         $known = $this->source->getSectionUserFieldCodes($iblockId);
+        $types = self::parseUserFieldTypes($properties);
         foreach (self::parseUserFields($properties) as $code => $value) {
-            if (in_array($code, $known, true)) {
-                $fields[$code] = $value;
-            } else {
-                $report->addWarning('Поле раздела "' . $code . '" не найдено в целевом инфоблоке, значение пропущено.');
+            if (!in_array($code, $known, true)) {
+                $report->addWarning(Loc::getMessage('IBX_SECTION_NO_USER_FIELD', ['#CODE#' => $code]));
+                continue;
             }
+
+            $type = $types[$code] ?? '';
+            if ($type === 'date' || $type === 'datetime') {
+                $convert = static fn(string $v) => DateValue::isoToUserField($v, $type === 'datetime');
+                $value = is_array($value) ? array_map($convert, $value) : $convert($value);
+            }
+            $fields[$code] = $value;
         }
     }
 }

@@ -11,7 +11,11 @@ namespace Vspace\Ibexport\Import;
  */
 interface PropertySourceInterface
 {
-    /** @return array<string, array{ID:int, MULTIPLE:string}> код свойства => метаданные, для данного инфоблока */
+    /**
+     * @return array<string, array{ID:int, MULTIPLE:string, PROPERTY_TYPE?:string, LINK_IBLOCK_ID?:int, WITH_DESCRIPTION?:string}>
+     *     код свойства => метаданные, для данного инфоблока (LINK_IBLOCK_ID — инфоблок привязки свойств E/G,
+     *     WITH_DESCRIPTION — у значений есть описание; отсутствие ключа = "нет")
+     */
     public function getDefinitions(int $iblockId): array;
 
     /** @return string[] коды пользовательских полей (UF_*) разделов данного инфоблока */

@@ -2,8 +2,11 @@
 
 namespace Vspace\Ibexport\Export;
 
+use Bitrix\Main\Localization\Loc;
 use CIBlockElement;
 use CIBlockSection;
+
+Loc::loadMessages(__FILE__);
 
 /** Собирает итоговый ZIP экспорта (export.xml + files/) и подбирает ему человекочитаемое имя. */
 final class ArchiveBuilder
@@ -19,7 +22,7 @@ final class ArchiveBuilder
 
         $zip = new \ZipArchive();
         if ($zip->open($archivePath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            throw new \Exception('Не удалось создать архив выгрузки.');
+            throw new \Exception(Loc::getMessage('IBX_ARCHIVE_CREATE_FAILED'));
         }
 
         $zip->addFile($tmpDir . '/export.xml', 'export.xml');
@@ -67,11 +70,11 @@ final class ArchiveBuilder
     private function resolveEntityName(string $entityType, int $entityId): string
     {
         if ($entityType === 'element') {
-            $el = CIBlockElement::GetByID($entityId)->GetNext();
+            $el = CIBlockElement::GetList([], ['ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
             return $el ? (string)($el['CODE'] ?: $el['NAME']) : '';
         }
 
-        $section = CIBlockSection::GetByID($entityId)->GetNext();
+        $section = CIBlockSection::GetList([], ['ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
         return $section ? (string)($section['CODE'] ?: $section['NAME']) : '';
     }
 

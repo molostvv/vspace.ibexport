@@ -2,7 +2,11 @@
 
 namespace Vspace\Ibexport\YandexDisk;
 
+use Bitrix\Main\Localization\Loc;
 use Vspace\Ibexport\Importer;
+use Vspace\Ibexport\TmpStorage;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Источник импорта "с Яндекс.Диска" — тот же результат, что и обычная
@@ -23,23 +27,24 @@ class ImportSource
     {
         $token = Settings::getToken();
         if ($token === '') {
-            throw new \Exception('Интеграция с Яндекс.Диском не настроена (нет сохранённого токена).');
+            throw new \Exception(Loc::getMessage('IBX_YADISK_NOT_CONFIGURED'));
         }
 
-        $tmpDirName = 'import_' . uniqid();
-        $tmpDir = $_SERVER['DOCUMENT_ROOT'] . VSPACE_IBEXPORT_TMP_DIR . '/' . $tmpDirName;
-        if (!is_dir($tmpDir) && !mkdir($tmpDir, 0755, true) && !is_dir($tmpDir)) {
-            throw new \Exception('Не удалось создать временный каталог для импорта.');
+        $tmpDirName = TmpStorage::create(TmpStorage::PREFIX_IMPORT);
+        try {
+            $tmpDir = TmpStorage::getPath($tmpDirName);
+            $zipPath = $tmpDir . '/disk.zip';
+            // Exception (YandexDisk\Exception) пробрасывается как есть —
+            // вызывающая сторона (admin/import.php) сама решает, как
+            // отформатировать сообщение, единообразно с ошибками listDiskFiles().
+            $client = new Client($token);
+            $client->downloadFile($diskPath, $zipPath);
+
+            return Importer::extractAndValidate($zipPath, $tmpDir, $tmpDirName, basename($diskPath));
+        } catch (\Throwable $e) {
+            TmpStorage::delete($tmpDirName);
+            throw $e;
         }
-
-        $zipPath = $tmpDir . '/disk.zip';
-        // Exception (YandexDisk\Exception) пробрасывается как есть —
-        // вызывающая сторона (admin/import.php) сама решает, как
-        // отформатировать сообщение, единообразно с ошибками listDiskFiles().
-        $client = new Client($token);
-        $client->downloadFile($diskPath, $zipPath);
-
-        return Importer::extractAndValidate($zipPath, $tmpDir, $tmpDirName, basename($diskPath));
     }
 
     /** Список файлов в папке обмена на Яндекс.Диске — для кнопки «Проверить Диск» на странице импорта. */
@@ -47,7 +52,7 @@ class ImportSource
     {
         $token = Settings::getToken();
         if ($token === '') {
-            throw new \Exception('Интеграция с Яндекс.Диском не настроена (нет сохранённого токена).');
+            throw new \Exception(Loc::getMessage('IBX_YADISK_NOT_CONFIGURED'));
         }
         $client = new Client($token);
         return $client->listFiles(Settings::getFolder());

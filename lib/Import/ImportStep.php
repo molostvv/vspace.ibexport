@@ -6,7 +6,6 @@ use Bitrix\Main\Type\DateTime;
 use SimpleXMLElement;
 use Vspace\Ibexport\ImportJobTable;
 use Vspace\Ibexport\JobEventLog;
-use Vspace\Ibexport\Options;
 
 /**
  * Специфичная для импорта часть одного тика (колбэк TickRunner): разбирает
@@ -100,13 +99,11 @@ final class ImportStep
 
     private function finalize(int $jobId): void
     {
-        $ttl = Options::getTtlHours();
-
         ImportJobTable::update($jobId, [
             'STATUS' => ImportJobTable::STATUS_DONE,
             'STAGE' => 'done',
             'DATE_FINISH' => new DateTime(),
-            'DATE_EXPIRE' => DateTime::createFromTimestamp(time() + $ttl * 3600),
+            'DATE_EXPIRE' => ImportJobTable::expireDate(),
         ]);
 
         $this->eventLog->done($jobId);
@@ -114,14 +111,20 @@ final class ImportStep
 
     private function buildContext(array $job, string $tmpDir): ImportContext
     {
-        return new ImportContext((int)$job['TARGET_IBLOCK_ID'], $job['UPDATE_BY_CODE'] === 'Y', $tmpDir, ($job['MATCH_BY_XML_ID'] ?? 'N') === 'Y');
+        return new ImportContext(
+            (int)$job['TARGET_IBLOCK_ID'],
+            $job['UPDATE_BY_CODE'] === 'Y',
+            $tmpDir,
+            ($job['MATCH_BY_XML_ID'] ?? 'N') === 'Y',
+            (int)$job['ID']
+        );
     }
 
     private function buildElementImporter(?BitrixPropertySource $source = null): ElementImporter
     {
         $files = new BitrixFileArrayFactory();
 
-        return new ElementImporter($files, new PropertyResolver($source ?? new BitrixPropertySource(), $files));
+        return new ElementImporter($files, new PropertyResolver($source ?? new BitrixPropertySource(), $files, new BitrixExistingRecordFinder()));
     }
 
     /** Предупреждения тика — в WARNINGS_JSON задания (в конце тика: при исключении посреди тика не сохраняются). */

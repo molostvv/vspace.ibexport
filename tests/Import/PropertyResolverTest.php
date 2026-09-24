@@ -8,6 +8,7 @@ use Vspace\Ibexport\Import\ImportReport;
 use Vspace\Ibexport\Import\PropertyResolver;
 use Vspace\Ibexport\Tests\Import\Fake\FakeFileArrayFactory;
 use Vspace\Ibexport\Tests\Import\Fake\FakePropertySource;
+use Vspace\Ibexport\Tests\Import\Fake\FakeRecordFinder;
 
 /**
  * Резолв свойств элемента при импорте по правилам docs/import-format.md:
@@ -54,11 +55,31 @@ final class PropertyResolverTest extends TestCase
         );
     }
 
-    private function resolve(string $propertiesXml, ?FakePropertySource $source = null, ?FakeFileArrayFactory $files = null, ?ImportReport $report = null): array
+    /** Свойства-привязки (E/G) с инфоблоками привязки и свойства с описаниями значений. */
+    private function linkSource(): FakePropertySource
     {
-        $resolver = new PropertyResolver($source ?? $this->source(), $files ?? new FakeFileArrayFactory());
+        return new FakePropertySource([self::IBLOCK => [
+            'AUTHOR' => ['ID' => 11, 'MULTIPLE' => 'N', 'LINK_IBLOCK_ID' => 20],
+            'RELATED' => ['ID' => 12, 'MULTIPLE' => 'Y', 'LINK_IBLOCK_ID' => 20],
+            'RUBRIC' => ['ID' => 13, 'MULTIPLE' => 'N', 'LINK_IBLOCK_ID' => 21],
+            'ANY_IBLOCK' => ['ID' => 14, 'MULTIPLE' => 'N', 'LINK_IBLOCK_ID' => 0],
+            'NOTES' => ['ID' => 15, 'MULTIPLE' => 'Y', 'WITH_DESCRIPTION' => 'Y'],
+            'DOCS' => ['ID' => 16, 'MULTIPLE' => 'Y', 'WITH_DESCRIPTION' => 'Y'],
+            'PLAIN' => ['ID' => 17, 'MULTIPLE' => 'Y'],
+        ]]);
+    }
 
-        return $resolver->resolve(self::IBLOCK, new SimpleXMLElement($propertiesXml), $this->tmpDir, $report ?? new ImportReport());
+    private function resolve(
+        string $propertiesXml,
+        ?FakePropertySource $source = null,
+        ?FakeFileArrayFactory $files = null,
+        ?ImportReport $report = null,
+        ?FakeRecordFinder $finder = null,
+        bool $matchByXmlId = false
+    ): array {
+        $resolver = new PropertyResolver($source ?? $this->source(), $files ?? new FakeFileArrayFactory(), $finder);
+
+        return $resolver->resolve(self::IBLOCK, new SimpleXMLElement($propertiesXml), $this->tmpDir, $report ?? new ImportReport(), $matchByXmlId);
     }
 
     private function touch(string $name): string
@@ -102,7 +123,7 @@ final class PropertyResolverTest extends TestCase
         $this->assertSame(['TITLE' => 'first'], $resolved);
     }
 
-    public function testTextIsTrimmedAndEmptyPropertyIsSkippedWithoutWarning(): void
+    public function testTextIsTrimmedAndEmptyPropertyClearsTheValueWithoutWarning(): void
     {
         $report = new ImportReport();
 
@@ -113,8 +134,16 @@ final class PropertyResolverTest extends TestCase
             $report
         );
 
-        $this->assertSame(['TITLE' => 'padded'], $resolved);
+        // false в SetPropertyValuesEx() очищает свойство: в исходной инсталляции оно пустое
+        $this->assertSame(['TITLE' => 'padded', 'RATING' => false], $resolved);
         $this->assertSame([], $report->getWarnings());
+    }
+
+    public function testEmptyFilePropertyIsClearedWithTheDeleteMarker(): void
+    {
+        $resolved = $this->resolve('<properties><property code="GALLERY" type="F"/><property code="COLOR" type="L"/></properties>');
+
+        $this->assertSame(['GALLERY' => PropertyResolver::CLEAR_FILES, 'COLOR' => false], $resolved);
     }
 
     public function testOtherPropertyTypesAreTreatedAsPlainText(): void
@@ -276,6 +305,30 @@ final class PropertyResolverTest extends TestCase
         $this->assertSame([], $files->requested);
     }
 
+    public function testFileReferenceOutsideTheArchiveFilesDirectoryIsRejected(): void
+    {
+        // поддельный export.xml не должен вытащить в инфоблок файлы сервера
+        file_put_contents($this->tmpDir . '/secret.txt', 'db password');
+        $files = new FakeFileArrayFactory();
+        $report = new ImportReport();
+
+        $resolved = $this->resolve(
+            '<properties><property code="GALLERY" type="F" multiple="true">'
+            . '<file file_ref="../secret.txt"/><file file_ref="files/../secret.txt"/><file file_ref="/etc/passwd"/>'
+            . '<file file_ref="files/sub/a.jpg"/><file file_ref="files/.htaccess"/>'
+            . '</property></properties>',
+            null,
+            $files,
+            $report
+        );
+        unlink($this->tmpDir . '/secret.txt');
+
+        $this->assertSame([], $resolved);
+        $this->assertSame([], $files->requested, 'no file outside files/ may be prepared');
+        $this->assertCount(5, $report->getWarnings());
+        $this->assertStringContainsString('недопустимая ссылка на файл "../secret.txt"', $report->getWarnings()[0]);
+    }
+
     public function testFileThatCannotBePreparedIsSilentlyDropped(): void
     {
         $path = $this->touch('bad.png');
@@ -287,6 +340,128 @@ final class PropertyResolverTest extends TestCase
         );
 
         $this->assertSame([], $resolved);
+    }
+
+    // ---------------------------------------------------------------- привязки (E/G)
+
+    public function testElementLinkIsResolvedByCodeInTheLinkedIblock(): void
+    {
+        $finder = new FakeRecordFinder(['element:CODE:ivanov' => [900, 'Иванов']]);
+        $report = new ImportReport();
+
+        $resolved = $this->resolve('<properties><property code="AUTHOR" type="E" ref_code="ivanov" ref_xml_id="77">501</property></properties>', $this->linkSource(), null, $report, $finder);
+
+        $this->assertSame(['AUTHOR' => 900], $resolved, 'ID исходной инсталляции (501) не переносится');
+        $this->assertSame(['element:CODE:ivanov'], $finder->asked);
+        $this->assertSame([], $report->getWarnings());
+    }
+
+    public function testMultipleLinksKeepOrderAndNotFoundOnesAreSkippedWithAWarning(): void
+    {
+        $finder = new FakeRecordFinder(['element:CODE:a' => [901, 'A'], 'element:CODE:c' => [903, 'C']]);
+        $report = new ImportReport();
+
+        $resolved = $this->resolve(
+            '<properties><property code="RELATED" type="E" multiple="true">'
+            . '<value ref_code="a" ref_xml_id="1">1</value><value ref_code="b" ref_xml_id="2">2</value><value ref_code="c" ref_xml_id="3">3</value>'
+            . '</property></properties>',
+            $this->linkSource(),
+            null,
+            $report,
+            $finder
+        );
+
+        $this->assertSame(['RELATED' => [901, 903]], $resolved);
+        $this->assertSame(['Свойство-привязка "RELATED": связанная запись (CODE b) не найдена в инфоблоке привязки 20, значение пропущено.'], $report->getWarnings());
+    }
+
+    public function testSectionLinkIsLookedUpAmongSections(): void
+    {
+        $finder = new FakeRecordFinder(['section:CODE:news' => [950, 'Новости']]);
+
+        $resolved = $this->resolve('<properties><property code="RUBRIC" type="G" ref_code="news" ref_xml_id="45">45</property></properties>', $this->linkSource(), null, null, $finder);
+
+        $this->assertSame(['RUBRIC' => 950], $resolved);
+    }
+
+    public function testLinkWithoutCodeIsMatchedByXmlIdOnlyWhenTheOptionIsOn(): void
+    {
+        $xml = '<properties><property code="AUTHOR" type="E" ref_code="" ref_xml_id="77">501</property></properties>';
+        $finder = new FakeRecordFinder(['element:XML_ID:77' => [902, 'Петров']]);
+
+        $report = new ImportReport();
+        $this->assertSame([], $this->resolve($xml, $this->linkSource(), null, $report, $finder));
+        $this->assertSame([], $finder->asked);
+        $this->assertCount(1, $report->getWarnings());
+
+        $this->assertSame(['AUTHOR' => 902], $this->resolve($xml, $this->linkSource(), null, null, $finder, true));
+    }
+
+    public function testAmbiguousXmlIdLinkIsSkipped(): void
+    {
+        $finder = new FakeRecordFinder(['element:XML_ID:77' => [[902, 'x'], [903, 'y']]]);
+        $report = new ImportReport();
+
+        $resolved = $this->resolve('<properties><property code="AUTHOR" type="E" ref_xml_id="77">501</property></properties>', $this->linkSource(), null, $report, $finder, true);
+
+        $this->assertSame([], $resolved);
+        $this->assertCount(1, $report->getWarnings());
+    }
+
+    public function testLinkFromAnOldArchiveIsNotWrittenAsARawSourceId(): void
+    {
+        // до 1.1.0 экспорт писал только ID связанной записи — на другой инсталляции он указал бы на чужую запись
+        $finder = new FakeRecordFinder();
+        $report = new ImportReport();
+
+        $resolved = $this->resolve('<properties><property code="AUTHOR" type="E">501</property></properties>', $this->linkSource(), null, $report, $finder);
+
+        $this->assertSame([], $resolved);
+        $this->assertSame([], $finder->asked);
+        $this->assertCount(1, $report->getWarnings());
+    }
+
+    public function testLinkPropertyWithoutALinkedIblockIsSkipped(): void
+    {
+        $finder = new FakeRecordFinder(['element:CODE:x' => [1, 'x']]);
+        $report = new ImportReport();
+
+        $resolved = $this->resolve('<properties><property code="ANY_IBLOCK" type="E" ref_code="x">5</property></properties>', $this->linkSource(), null, $report, $finder);
+
+        $this->assertSame([], $resolved);
+        $this->assertSame([], $finder->asked);
+        $this->assertCount(1, $report->getWarnings());
+    }
+
+    // ---------------------------------------------------------------- описания значений
+
+    public function testDescriptionsArePassedWhenTheTargetPropertyHasThem(): void
+    {
+        $resolved = $this->resolve(
+            '<properties><property code="NOTES" type="S" multiple="true"><value description="примечание">a</value><value>b</value></property></properties>',
+            $this->linkSource()
+        );
+
+        $this->assertSame(['NOTES' => [['VALUE' => 'a', 'DESCRIPTION' => 'примечание'], 'b']], $resolved);
+    }
+
+    public function testDescriptionIsDroppedWhenTheTargetPropertyHasNone(): void
+    {
+        $resolved = $this->resolve('<properties><property code="PLAIN" type="S"><value description="d">a</value></property></properties>', $this->linkSource());
+
+        $this->assertSame(['PLAIN' => ['a']], $resolved);
+    }
+
+    public function testFileDescriptionGoesToTheFileAndToTheValue(): void
+    {
+        $path = $this->touch('price.pdf');
+
+        $resolved = $this->resolve('<properties><property code="DOCS" type="F" multiple="true"><file file_ref="files/price.pdf" description="Прайс"/></property></properties>', $this->linkSource());
+
+        $this->assertSame(['DOCS' => [[
+            'VALUE' => ['name' => 'price.pdf', 'tmp_name' => $path, 'description' => 'Прайс'],
+            'DESCRIPTION' => 'Прайс',
+        ]]], $resolved);
     }
 
     // ---------------------------------------------------------------- прочее

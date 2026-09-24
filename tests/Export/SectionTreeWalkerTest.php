@@ -66,10 +66,13 @@ XML;
         return new ExportContext(8, false, false, '', $batchSize);
     }
 
-    /** Отступ на границе тика зависит от того, где оборвался обход (косметика, как и в проде) — сравниваем без него. */
+    /**
+     * Отступ на границе тика зависит от того, где оборвался обход (косметика, как и в проде) — сравниваем без него.
+     * Переводы строк приводятся к "\n": эталоны-heredoc в этом файле при checkout на Windows (core.autocrlf) получают CRLF.
+     */
     private function normalize(string $xml): string
     {
-        return preg_replace('~^[ ]+~m', '', $xml);
+        return preg_replace('~^[ ]+~m', '', str_replace("\r\n", "\n", $xml));
     }
 
     /** Часы-счётчик: каждый вызов — +1; с крайним сроком N цикл делает ровно N проходов. */
@@ -128,7 +131,7 @@ XML;
     {
         $r = $this->walkTree(null);
 
-        $this->assertSame(self::FULL_TREE_XML, $this->normalize($r['xml']));
+        $this->assertSame($this->normalize(self::FULL_TREE_XML), $this->normalize($r['xml']));
         $this->assertSame(4, $r['sections']);
         $this->assertSame(6, $r['elements']);
         $this->assertSame(1, $r['ticks']);
@@ -250,6 +253,28 @@ XML;
         $this->assertSame([['elements', 4, 0], ['elements', 4, 2]], $reads);
     }
 
+    public function testChildSectionsAreReadPageByPageAndOnlyOnePageIsKeptInTheState(): void
+    {
+        // batch=1: подразделы корня читаются страницами [2], [3], [] — в STATE_JSON никогда не больше одной страницы
+        $r = $this->walkTree(1, true, null, 1);
+
+        $rootReads = array_values(array_filter($r['source']->calls, static fn(array $c): bool => $c[0] === 'children' && $c[1] === 1));
+        $this->assertSame([['children', 1, 0], ['children', 1, 1], ['children', 1, 2]], $rootReads);
+        foreach ($r['snapshots'] as $stack) {
+            foreach ($stack as $frame) {
+                $this->assertLessThanOrEqual(1, count($frame['children_ids'] ?? []));
+            }
+        }
+        $this->assertSame($this->normalize($this->walkTree(null)['xml']), $this->normalize($r['xml']));
+    }
+
+    public function testEachElementIsWrittenWithTheSectionItIsExportedUnder(): void
+    {
+        $r = $this->walkTree(null);
+
+        $this->assertSame([10 => 1, 11 => 1, 12 => 1, 20 => 2, 40 => 4, 41 => 4], $r['elementWriter']->sections);
+    }
+
     public function testDifferentBatchSizesGiveTheSameOutput(): void
     {
         $reference = $this->normalize($this->walkTree(null, true, null, 2)['xml']);
@@ -286,7 +311,7 @@ XML;
 </section>
 
 XML;
-        $this->assertSame($expectedTail, $this->normalize($r['xml']));
+        $this->assertSame($this->normalize($expectedTail), $this->normalize($r['xml']));
         $this->assertSame([3, 4], $r['sectionWriter']->opened, 'already exported sections must not be written again');
         $this->assertSame([40, 41], $r['elementWriter']->written);
         $this->assertSame(2, $r['sections']);

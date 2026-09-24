@@ -10,11 +10,6 @@ if (!defined('VSPACE_IBEXPORT_MODULE_ID')) {
 if (!defined('VSPACE_IBEXPORT_PATH')) {
     define('VSPACE_IBEXPORT_PATH', __DIR__);
 }
-if (!defined('VSPACE_IBEXPORT_TMP_DIR')) {
-    // Путь относительно $_SERVER['DOCUMENT_ROOT'], см. раздел 8 ТЗ.
-    define('VSPACE_IBEXPORT_TMP_DIR', '/upload/tmp/vspace.ibexport');
-}
 
-// Автозагрузка классов регистрируется в install/index.php через Loader::registerAutoLoadClasses(),
-// поэтому здесь ничего дополнительно подключать не нужно. Файл существует для
-// обратной совместимости с CModule::IncludeModule() и ради констант выше.
+// Классы lib/ подключаются автоматически: Loader::includeModule() регистрирует для партнёрского модуля
+// PSR-4 пространство имён Vspace\Ibexport -> lib/. Рабочие каталоги заданий — см. lib/TmpStorage.php.

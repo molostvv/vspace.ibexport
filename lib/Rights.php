@@ -2,6 +2,10 @@
 
 namespace Vspace\Ibexport;
 
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages(__FILE__);
+
 class Rights
 {
     const MODULE_ID = 'vspace.ibexport';
@@ -36,7 +40,7 @@ class Rights
     public static function requireExportRight(int $iblockId): void
     {
         if (!self::canExport($iblockId)) {
-            throw new \Bitrix\Main\AccessDeniedException('Недостаточно прав для экспорта данного инфоблока.');
+            throw new \Bitrix\Main\AccessDeniedException(Loc::getMessage('IBX_RIGHTS_NO_EXPORT'));
         }
     }
 
@@ -70,7 +74,7 @@ class Rights
     public static function requireImportRight(int $iblockId): void
     {
         if (!self::canImport($iblockId)) {
-            throw new \Bitrix\Main\AccessDeniedException('Недостаточно прав для импорта в данный инфоблок.');
+            throw new \Bitrix\Main\AccessDeniedException(Loc::getMessage('IBX_RIGHTS_NO_IMPORT'));
         }
     }
 }

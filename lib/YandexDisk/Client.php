@@ -2,8 +2,11 @@
 
 namespace Vspace\Ibexport\YandexDisk;
 
+use Bitrix\Main\Localization\Loc;
 use Vspace\Ibexport\YandexDisk\Http\BitrixHttpTransport;
 use Vspace\Ibexport\YandexDisk\Http\TransportInterface;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Обёртка над REST API Яндекс.Диска (cloud-api.yandex.net) — канал переноса
@@ -29,7 +32,7 @@ class Client
     public function __construct(string $token, ?TransportInterface $transport = null, int $timeout = 15)
     {
         if ($token === '') {
-            throw new Exception('Не задан токен Яндекс.Диска.');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_TOKEN'));
         }
         $this->token = $token;
         $this->transport = $transport ?? new BitrixHttpTransport($timeout);
@@ -56,7 +59,7 @@ class Client
     {
         $data = json_decode($body, true);
         if (!is_array($data)) {
-            throw new Exception('Некорректный (не JSON) ответ Яндекс.Диска.');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_BAD_JSON'));
         }
         return $data;
     }
@@ -64,7 +67,7 @@ class Client
     private function throwOnTransportFailure(array $res): void
     {
         if ($res['status'] === 0) {
-            throw new Exception('Яндекс.Диск недоступен: ' . $res['body']);
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_UNAVAILABLE', ['#ERROR#' => $res['body']]));
         }
     }
 
@@ -80,7 +83,9 @@ class Client
     {
         $scheme = parse_url($url, PHP_URL_SCHEME);
         $host = parse_url($url, PHP_URL_HOST);
-        return 'схема=' . ($scheme ?: '(нет)') . ', хост=' . ($host ?: '(нет)') . ', длина=' . strlen($url);
+        $none = Loc::getMessage('IBX_YADISK_CLIENT_NONE');
+
+        return Loc::getMessage('IBX_YADISK_CLIENT_HREF_PREVIEW', ['#SCHEME#' => $scheme ?: $none, '#HOST#' => $host ?: $none, '#LENGTH#' => strlen($url)]);
     }
 
     private function throwApiError(int $status, string $body): void
@@ -130,12 +135,12 @@ class Client
     public function uploadFile(string $diskPath, string $localFilePath, bool $overwrite = false): void
     {
         if (!is_file($localFilePath)) {
-            throw new Exception('Локальный файл для выгрузки не найден: ' . $localFilePath);
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_LOCAL_FILE_NOT_FOUND', ['#PATH#' => $localFilePath]));
         }
 
         $size = filesize($localFilePath);
         if ($size === false || $size > self::MAX_FILE_SIZE) {
-            throw new Exception('Файл превышает лимит 1 ГБ для бесплатного тарифа Яндекс.Диска.');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_FILE_TOO_BIG'));
         }
 
         $res = $this->transport->request('GET', $this->buildUrl('/resources/upload', [
@@ -149,19 +154,19 @@ class Client
 
         $href = (string)($this->decodeJson($res['body'])['href'] ?? '');
         if ($href === '') {
-            throw new Exception('Яндекс.Диск не вернул ссылку для загрузки.');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_UPLOAD_HREF'));
         }
 
         $content = file_get_contents($localFilePath);
         if ($content === false) {
-            throw new Exception('Не удалось прочитать файл для выгрузки: ' . $localFilePath);
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_READ_FAILED', ['#PATH#' => $localFilePath]));
         }
 
         // href уже содержит собственный временный токен доступа — заголовок
         // авторизации Диска здесь не нужен (и не требуется API).
         $uploadRes = $this->transport->request('PUT', $href, [], $content);
         if ($uploadRes['status'] === 0) {
-            throw new Exception('Не удалось обратиться по ссылке для загрузки (' . $this->hrefPreview($href) . '): ' . $uploadRes['body']);
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_UPLOAD_HREF_FAILED', ['#HREF#' => $this->hrefPreview($href), '#ERROR#' => $uploadRes['body']]));
         }
         if (!in_array($uploadRes['status'], [201, 202], true)) {
             $this->throwApiError($uploadRes['status'], $uploadRes['body']);
@@ -217,16 +222,16 @@ class Client
 
         $href = (string)($this->decodeJson($res['body'])['href'] ?? '');
         if ($href === '') {
-            throw new Exception('Яндекс.Диск не вернул ссылку для скачивания.');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_DOWNLOAD_HREF'));
         }
 
         $status = $this->transport->downloadToFile($href, [], $localFilePath);
         if ($status === 0) {
-            throw new Exception('Не удалось скачать файл по ссылке от Яндекс.Диска (' . $this->hrefPreview($href) . ').');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HREF_FAILED', ['#HREF#' => $this->hrefPreview($href)]));
         }
         if ($status < 200 || $status >= 300) {
             @unlink($localFilePath);
-            throw new Exception('Ошибка при скачивании файла с Яндекс.Диска (HTTP ' . $status . ').');
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HTTP_ERROR', ['#STATUS#' => $status]));
         }
     }
 }

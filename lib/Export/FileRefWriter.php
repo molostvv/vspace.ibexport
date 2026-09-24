@@ -2,8 +2,11 @@
 
 namespace Vspace\Ibexport\Export;
 
+use Bitrix\Main\Localization\Loc;
 use CFile;
 use Vspace\Ibexport\XmlStreamWriter;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Пишет XML-ссылку на файл (<picture/>, <preview_picture/>, <file/> ...) и,
@@ -21,7 +24,10 @@ final class FileRefWriter
     ) {
     }
 
-    public function write(XmlStreamWriter $w, string $tag, int $fileId): void
+    /**
+     * @param string|null $description Описание значения (у файлового свойства); null — описание самого файла (b_file)
+     */
+    public function write(XmlStreamWriter $w, string $tag, int $fileId, ?string $description = null): void
     {
         if (!$fileId) {
             $w->openTag($tag, [], true);
@@ -31,7 +37,7 @@ final class FileRefWriter
         $fileArr = CFile::GetFileArray($fileId);
         if (!$fileArr || empty($fileArr['SRC'])) {
             $w->openTag($tag, ['missing' => 'Y', 'file_id' => $fileId], true);
-            ($this->warn)('Файл #' . $fileId . ' не найден, пропущен.');
+            ($this->warn)(Loc::getMessage('IBX_FILE_REF_MISSING', ['#ID#' => $fileId]));
             return;
         }
 
@@ -40,6 +46,10 @@ final class FileRefWriter
             'size' => $fileArr['FILE_SIZE'],
             'mime' => $fileArr['CONTENT_TYPE'],
         ];
+        $description = ($description ?? '') !== '' ? $description : (string)($fileArr['DESCRIPTION'] ?? '');
+        if ($description !== '') {
+            $attrs['description'] = $description;
+        }
 
         if ($this->withFiles) {
             $destName = $fileId . '_' . preg_replace('~[^A-Za-z0-9._-]+~u', '_', $fileArr['FILE_NAME']);
@@ -52,14 +62,14 @@ final class FileRefWriter
                         mkdir($this->filesDir, 0755, true);
                     }
                     if (!copy($srcPath, $destPath)) {
-                        throw new \Exception('ошибка copy()');
+                        throw new \Exception(Loc::getMessage('IBX_FILE_REF_COPY_FAILED'));
                     }
                     $attrs['file_ref'] = 'files/' . $destName;
                 } else {
-                    throw new \Exception('исходный файл отсутствует на диске');
+                    throw new \Exception(Loc::getMessage('IBX_FILE_REF_NO_SOURCE'));
                 }
             } catch (\Throwable $e) {
-                ($this->warn)('Не удалось скопировать файл #' . $fileId . ' (' . $fileArr['FILE_NAME'] . '): ' . $e->getMessage());
+                ($this->warn)(Loc::getMessage('IBX_FILE_REF_NOT_COPIED', ['#ID#' => $fileId, '#NAME#' => $fileArr['FILE_NAME'], '#ERROR#' => $e->getMessage()]));
             }
         }
 

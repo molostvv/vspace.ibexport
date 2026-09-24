@@ -66,3 +66,6 @@ $MESS['IBYADISK_BTN_IMPORT_FILE'] = 'Import';
 $MESS['IBYADISK_LIST_ERROR'] = 'Failed to get the file list from Yandex.Disk: #MESSAGE#';
 $MESS['IBYADISK_ERR_NO_PATH'] = 'No file on Yandex.Disk specified.';
 $MESS['IBYADISK_DOWNLOAD_ERROR'] = 'Failed to download the file from Yandex.Disk: #MESSAGE#';
+$MESS['IBIMPORT_LEGACY_FORMAT'] = 'The archive was exported by a module version before 1.1.0: names and texts may contain HTML entities (&amp;quot; etc.) and extra &lt;br /&gt; line breaks, dates are in the source site format, and link property values have no matching keys (such values will be skipped). Re-exporting the data is recommended.';
+$MESS['IBIMPORT_IGNORED_ENTRIES'] = 'Unrelated files skipped in the archive: #COUNT# (only export.xml and the files/ directory are extracted).';
+$MESS['IBIMPORT_PREVIEW_ACTION_LINK'] = 'Add section link';

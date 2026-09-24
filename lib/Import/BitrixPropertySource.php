@@ -8,7 +8,7 @@ use CIBlockPropertyEnum;
 /** Боевой источник определений свойств — классический API инфоблоков; результаты кэшируются на время жизни экземпляра. */
 final class BitrixPropertySource implements PropertySourceInterface
 {
-    /** @var array<int, array<string, array{ID:int, MULTIPLE:string}>> */
+    /** @var array<int, array<string, array{ID:int, MULTIPLE:string, PROPERTY_TYPE:string, LINK_IBLOCK_ID:int, WITH_DESCRIPTION:string}>> */
     private array $definitions = [];
 
     /** @var array<int, array<string, int>> */
@@ -24,7 +24,13 @@ final class BitrixPropertySource implements PropertySourceInterface
         $res = CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'ACTIVE' => 'Y']);
         while ($prop = $res->Fetch()) {
             if ($prop['CODE'] !== '') {
-                $defs[$prop['CODE']] = ['ID' => (int)$prop['ID'], 'MULTIPLE' => $prop['MULTIPLE']];
+                $defs[$prop['CODE']] = [
+                    'ID' => (int)$prop['ID'],
+                    'MULTIPLE' => $prop['MULTIPLE'],
+                    'PROPERTY_TYPE' => (string)$prop['PROPERTY_TYPE'],
+                    'LINK_IBLOCK_ID' => (int)$prop['LINK_IBLOCK_ID'],
+                    'WITH_DESCRIPTION' => (string)$prop['WITH_DESCRIPTION'],
+                ];
             }
         }
 

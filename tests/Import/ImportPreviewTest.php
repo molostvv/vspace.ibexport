@@ -199,6 +199,30 @@ XML;
         $this->assertCount(2, $finder->asked, 'в БД ходим только за показанными строками');
     }
 
+    public function testRepeatedOccurrenceOfAnElementCreatedByTheImportOnlyAddsALink(): void
+    {
+        // элемент 7 (без кода) привязан к разделам a и b, элемент 8 (код x, уже есть в инфоблоке) — к b и c
+        $xml = '<export mode="section_tree" version="2"><section id="1" code="a" active="Y"><name>A</name><elements>'
+            . '<element id="7" code="" xml_id="7" main_section="N"><name>E</name></element>'
+            . '</elements><sections>'
+            . '<section id="2" code="b" active="Y"><name>B</name><elements>'
+            . '<element id="7" code="" xml_id="7" main_section="Y"><name>E</name></element>'
+            . '<element id="8" code="x" xml_id="8" main_section="N"><name>X</name></element>'
+            . '</elements></section>'
+            . '<section id="3" code="c" active="Y"><name>C</name><elements>'
+            . '<element id="8" code="x" xml_id="8" main_section="Y"><name>X</name></element>'
+            . '</elements></section>'
+            . '</sections></section></export>';
+        $finder = new FakeRecordFinder(['element:CODE:x' => [500, 'X']]);
+
+        $rows = $this->build($xml, 'section_tree', $this->ctx(true, false), $finder)['rows'];
+
+        $this->assertSame(
+            [['section', 'create'], ['element', 'create'], ['section', 'create'], ['element', 'link'], ['element', 'update'], ['section', 'create'], ['element', 'update']],
+            array_map(static fn(array $r) => [$r['kind'], $r['action']], $rows)
+        );
+    }
+
     public function testElementModeShowsSectionPathFromArchive(): void
     {
         $xml = '<export mode="element"><element id="5" code="c" active="Y"><name>E</name><sections>'

@@ -3,10 +3,20 @@
 namespace Vspace\Ibexport\Export;
 
 use Bitrix\Iblock\SectionTable;
+use Bitrix\Main\Localization\Loc;
 use CIBlockSection;
+use Vspace\Ibexport\DateValue;
 use Vspace\Ibexport\XmlStreamWriter;
 
-/** Читает раздел из БД и пишет его XML-узел (docs/xml-format.md, "Разделы"). */
+Loc::loadMessages(__FILE__);
+
+/**
+ * Читает раздел из БД и пишет его XML-узел (docs/xml-format.md, "Разделы").
+ *
+ * Как и в ElementWriter: Fetch(), а не GetNext() (иначе в архив попали бы значения, экранированные для HTML), и без
+ * проверки прав — CIBlockSection::GetList() по умолчанию проверяет права текущего пользователя, а фоновый тик идёт в
+ * агенте без авторизации, и раздел закрытого инфоблока "не находился".
+ */
 class SectionWriter
 {
     /** @param (\Closure(string): void)|null $warn Куда сообщать о полях, которые не удалось выгрузить */
@@ -20,20 +30,20 @@ class SectionWriter
      */
     public function writeOpen(XmlStreamWriter $w, int $sectionId): void
     {
-        $section = CIBlockSection::GetByID($sectionId)->GetNext();
+        $section = CIBlockSection::GetList([], ['ID' => $sectionId, 'CHECK_PERMISSIONS' => 'N'])->Fetch();
         if (!$section) {
-            throw new \Exception('Раздел #' . $sectionId . ' не найден.');
+            throw new \Exception(Loc::getMessage('IBX_SECTION_WRITER_NOT_FOUND', ['#ID#' => $sectionId]));
         }
 
         $w->openTag('section', [
             'id' => $section['ID'],
             'code' => $section['CODE'],
-            'xml_id' => $section['~XML_ID'],
+            'xml_id' => $section['XML_ID'],
             'active' => $section['ACTIVE'],
             'sort' => $section['SORT'],
         ]);
         $w->textTag('name', $section['NAME']);
-        $w->textTag('description', $section['DESCRIPTION'], [], true);
+        $w->textTag('description', $section['DESCRIPTION'], ['type' => $section['DESCRIPTION_TYPE'] ?: 'text'], true);
         $this->files->write($w, 'picture', (int)$section['PICTURE']);
 
         $w->openTag('properties');
@@ -42,9 +52,9 @@ class SectionWriter
     }
 
     /**
-     * UF_*-поля раздела через штатный UserFieldManager (CIBlockSection::GetByID их не возвращает).
-     * Одиночное значение — текст узла, множественное — <value> на каждое; типы, значение которых
-     * привязано к этой инсталляции (файл, список и т.п.), не выгружаются — с предупреждением.
+     * UF_*-поля раздела через штатный UserFieldManager (CIBlockSection::GetList их без явного select не возвращает).
+     * Одиночное значение — текст узла, множественное — <value> на каждое; атрибут type — тип поля, даты — в ISO 8601.
+     * Типы, значение которых привязано к этой инсталляции (файл, список и т.п.), не выгружаются — с предупреждением.
      */
     private function writeUserFields(XmlStreamWriter $w, int $iblockId, int $sectionId): void
     {
@@ -60,19 +70,22 @@ class SectionWriter
             $type = (string)$field['USER_TYPE_ID'];
             if (!UserFieldExport::isSupported($type)) {
                 if ($this->warn) {
-                    ($this->warn)('Поле раздела "' . $code . '" (тип "' . $type . '") не выгружено: значение этого типа привязано к данной инсталляции.');
+                    ($this->warn)(Loc::getMessage('IBX_SECTION_WRITER_UF_SKIPPED', ['#CODE#' => $code, '#TYPE#' => $type]));
                 }
                 continue;
             }
+            if ($type === 'date' || $type === 'datetime') {
+                $values = array_map(static fn(string $value): string => DateValue::userFieldToIso($value, $type === 'datetime'), $values);
+            }
 
             if (($field['MULTIPLE'] ?? 'N') === 'Y') {
-                $w->openTag('property', ['code' => $code, 'multiple' => 'true']);
+                $w->openTag('property', ['code' => $code, 'type' => $type, 'multiple' => 'true']);
                 foreach ($values as $value) {
                     $w->textTag('value', $value);
                 }
                 $w->closeTag('property');
             } else {
-                $w->textTag('property', $values[0], ['code' => $code]);
+                $w->textTag('property', $values[0], ['code' => $code, 'type' => $type]);
             }
         }
     }
@@ -86,9 +99,8 @@ class SectionWriter
         }
         $res = SectionTable::getList([
             'filter' => $filter,
-            'select' => ['ID', 'CODE', 'NAME', 'ACTIVE'],
-            'order' => ['SORT' => 'ASC'],
-            'limit' => 5000,
+            'select' => ['ID', 'CODE', 'ACTIVE'],
+            'order' => ['SORT' => 'ASC', 'NAME' => 'ASC'],
         ]);
 
         $w->openTag('subsections', ['note' => 'not_included_see_mode']);

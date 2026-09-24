@@ -65,6 +65,11 @@ final class ImportPageController
 
         if (in_array($step, ['validate', 'recalc', 'run', 'disk_list', 'disk_import'], true)) {
             try {
+                // Каждый шаг что-то делает от имени пользователя (принимает архив, качает файл с Диска, запускает
+                // импорт) — только из формы этой страницы, не по ссылке или форме с чужого сайта.
+                if (!check_bitrix_sessid()) {
+                    throw new \Exception(GetMessage('IBIMPORT_ERR_SESSID'));
+                }
                 if ($iblockId <= 0) {
                     throw new \Exception(GetMessage('IBIMPORT_ERR_NO_IBLOCK'));
                 }
@@ -97,10 +102,6 @@ final class ImportPageController
                         throw new \Exception(GetMessage('IBYADISK_DOWNLOAD_ERROR', ['#MESSAGE#' => $e->getMessage()]));
                     }
                 } else { // STEP=run — уже провалидированный на предыдущем шаге архив
-                    if (!check_bitrix_sessid()) {
-                        throw new \Exception(GetMessage('IBIMPORT_ERR_SESSID'));
-                    }
-
                     $tmpDirName = (string)($request->get('TMP_DIR') ?? '');
                     Importer::resolveTmpDir($tmpDirName); // бросит исключение, если архив не найден/устарел
 

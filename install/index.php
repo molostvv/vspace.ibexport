@@ -1,7 +1,9 @@
 <?php
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
@@ -9,6 +11,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 }
 
 Loader::includeModule('main');
+Loc::loadMessages(__FILE__);
 
 class vspace_ibexport extends CModule
 {
@@ -27,11 +30,34 @@ class vspace_ibexport extends CModule
         $this->MODULE_VERSION = $arModuleVersion['VERSION'];
         $this->MODULE_VERSION_DATE = $arModuleVersion['VERSION_DATE'];
 
-        $langFile = __DIR__ . '/../lang/' . LANGUAGE_ID . '/install/index.php';
-        include_once file_exists($langFile) ? $langFile : __DIR__ . '/../lang/en/install/index.php';
+        $this->MODULE_NAME = Loc::getMessage('IBEXPORT_MODULE_NAME');
+        $this->MODULE_DESCRIPTION = Loc::getMessage('IBEXPORT_MODULE_DESC');
+    }
 
-        $this->MODULE_NAME = isset($MESS['IBEXPORT_MODULE_NAME']) ? $MESS['IBEXPORT_MODULE_NAME'] : 'IBlock Export';
-        $this->MODULE_DESCRIPTION = isset($MESS['IBEXPORT_MODULE_DESC']) ? $MESS['IBEXPORT_MODULE_DESC'] : 'Export of iblock elements and sections';
+    /**
+     * Уровни доступа к модулю (вкладка "Доступ" в настройках модуля, options.php). Операции проверяет
+     * lib/Rights.php: vspace_ibexport_export / vspace_ibexport_import разрешают экспорт/импорт любого
+     * инфоблока независимо от прав на сам инфоблок. Названия — admin/task_description.php.
+     */
+    public function GetModuleTasks()
+    {
+        return [
+            'vspace_ibexport_denied' => [
+                'LETTER' => 'D',
+                'BINDING' => 'module',
+                'OPERATIONS' => [],
+            ],
+            'vspace_ibexport_export' => [
+                'LETTER' => 'R',
+                'BINDING' => 'module',
+                'OPERATIONS' => ['vspace_ibexport_export'],
+            ],
+            'vspace_ibexport_full' => [
+                'LETTER' => 'W',
+                'BINDING' => 'module',
+                'OPERATIONS' => ['vspace_ibexport_export', 'vspace_ibexport_import'],
+            ],
+        ];
     }
 
     public function InstallDB()
@@ -168,84 +194,54 @@ class vspace_ibexport extends CModule
         global $APPLICATION;
 
         if (!Loader::includeModule('iblock')) {
-            $APPLICATION->ThrowException('Для работы модуля необходим установленный модуль "Информационные блоки" (iblock).');
+            $APPLICATION->ThrowException(Loc::getMessage('IBEXPORT_INSTALL_NEED_IBLOCK'));
             return false;
         }
 
+        // Классы lib/ подключает автозагрузчик ядра: Loader::includeModule() регистрирует для модуля
+        // пространство имён Vspace\Ibexport -> lib/, отдельная регистрация классов не нужна.
         ModuleManager::registerModule($this->MODULE_ID);
-
-        Loader::registerAutoLoadClasses($this->MODULE_ID, [
-            'Vspace\\Ibexport\\Exporter' => 'lib/Exporter.php',
-            'Vspace\\Ibexport\\Importer' => 'lib/Importer.php',
-            'Vspace\\Ibexport\\AbstractJobTable' => 'lib/AbstractJobTable.php',
-            'Vspace\\Ibexport\\JobTable' => 'lib/JobTable.php',
-            'Vspace\\Ibexport\\ImportJobTable' => 'lib/ImportJobTable.php',
-            'Vspace\\Ibexport\\TickRunner' => 'lib/TickRunner.php',
-            'Vspace\\Ibexport\\JobEventLog' => 'lib/JobEventLog.php',
-            'Vspace\\Ibexport\\IblockListProvider' => 'lib/IblockListProvider.php',
-            'Vspace\\Ibexport\\Admin\\AdminMessages' => 'lib/Admin/AdminMessages.php',
-            'Vspace\\Ibexport\\Admin\\ExportPageController' => 'lib/Admin/ExportPageController.php',
-            'Vspace\\Ibexport\\Admin\\ImportPageController' => 'lib/Admin/ImportPageController.php',
-            'Vspace\\Ibexport\\WalkResult' => 'lib/WalkResult.php',
-            'Vspace\\Ibexport\\TraversalFrame' => 'lib/TraversalFrame.php',
-            'Vspace\\Ibexport\\Export\\ExportFrame' => 'lib/Export/ExportFrame.php',
-            'Vspace\\Ibexport\\Import\\ImportFrame' => 'lib/Import/ImportFrame.php',
-            'Vspace\\Ibexport\\Export\\ExportContext' => 'lib/Export/ExportContext.php',
-            'Vspace\\Ibexport\\Export\\ExportStep' => 'lib/Export/ExportStep.php',
-            'Vspace\\Ibexport\\Export\\SectionTreeWalker' => 'lib/Export/SectionTreeWalker.php',
-            'Vspace\\Ibexport\\Export\\TreeSourceInterface' => 'lib/Export/TreeSourceInterface.php',
-            'Vspace\\Ibexport\\Export\\BitrixTreeSource' => 'lib/Export/BitrixTreeSource.php',
-            'Vspace\\Ibexport\\Export\\SectionWriter' => 'lib/Export/SectionWriter.php',
-            'Vspace\\Ibexport\\Export\\ElementWriter' => 'lib/Export/ElementWriter.php',
-            'Vspace\\Ibexport\\Export\\FileRefWriter' => 'lib/Export/FileRefWriter.php',
-            'Vspace\\Ibexport\\Export\\ArchiveBuilder' => 'lib/Export/ArchiveBuilder.php',
-            'Vspace\\Ibexport\\Import\\ImportContext' => 'lib/Import/ImportContext.php',
-            'Vspace\\Ibexport\\Import\\ImportReport' => 'lib/Import/ImportReport.php',
-            'Vspace\\Ibexport\\Import\\ImportStep' => 'lib/Import/ImportStep.php',
-            'Vspace\\Ibexport\\Import\\SectionTreeWalker' => 'lib/Import/SectionTreeWalker.php',
-            'Vspace\\Ibexport\\Import\\SectionImporter' => 'lib/Import/SectionImporter.php',
-            'Vspace\\Ibexport\\Import\\ElementImporter' => 'lib/Import/ElementImporter.php',
-            'Vspace\\Ibexport\\Import\\AbstractNodeImporter' => 'lib/Import/AbstractNodeImporter.php',
-            'Vspace\\Ibexport\\Import\\PropertyResolver' => 'lib/Import/PropertyResolver.php',
-            'Vspace\\Ibexport\\Import\\PropertySourceInterface' => 'lib/Import/PropertySourceInterface.php',
-            'Vspace\\Ibexport\\Import\\BitrixPropertySource' => 'lib/Import/BitrixPropertySource.php',
-            'Vspace\\Ibexport\\Import\\FileArrayFactoryInterface' => 'lib/Import/FileArrayFactoryInterface.php',
-            'Vspace\\Ibexport\\Import\\BitrixFileArrayFactory' => 'lib/Import/BitrixFileArrayFactory.php',
-            'Vspace\\Ibexport\\Import\\ExistingRecordFinderInterface' => 'lib/Import/ExistingRecordFinderInterface.php',
-            'Vspace\\Ibexport\\Import\\BitrixExistingRecordFinder' => 'lib/Import/BitrixExistingRecordFinder.php',
-            'Vspace\\Ibexport\\Import\\ImportPreview' => 'lib/Import/ImportPreview.php',
-            'Vspace\\Ibexport\\Export\\UserFieldExport' => 'lib/Export/UserFieldExport.php',
-            'Vspace\\Ibexport\\WarningList' => 'lib/WarningList.php',
-            'Vspace\\Ibexport\\Rights' => 'lib/Rights.php',
-            'Vspace\\Ibexport\\Options' => 'lib/Options.php',
-            'Vspace\\Ibexport\\XmlStreamWriter' => 'lib/XmlStreamWriter.php',
-            'Vspace\\Ibexport\\Integration\\AdminListIntegration' => 'lib/Integration/AdminListIntegration.php',
-            'Vspace\\Ibexport\\YandexDisk\\Client' => 'lib/YandexDisk/Client.php',
-            'Vspace\\Ibexport\\YandexDisk\\Exception' => 'lib/YandexDisk/Exception.php',
-            'Vspace\\Ibexport\\YandexDisk\\Settings' => 'lib/YandexDisk/Settings.php',
-            'Vspace\\Ibexport\\YandexDisk\\ImportSource' => 'lib/YandexDisk/ImportSource.php',
-            'Vspace\\Ibexport\\YandexDisk\\Http\\TransportInterface' => 'lib/YandexDisk/Http/TransportInterface.php',
-            'Vspace\\Ibexport\\YandexDisk\\Http\\BitrixHttpTransport' => 'lib/YandexDisk/Http/BitrixHttpTransport.php',
-        ]);
 
         $this->InstallFiles();
         $this->InstallDB();
         $this->InstallEvents();
+        $this->InstallTasks();
 
         return true;
     }
 
+    /**
+     * Удаление в два шага, как у модулей ядра: шаг 1 — форма подтверждения с галкой "Сохранить таблицы"
+     * (install/unstep1.php), шаг 2 — само удаление. С сохранением остаются таблицы заданий (журналы) и
+     * настройки модуля (в том числе токен Яндекс.Диска); временные файлы заданий удаляются в любом случае.
+     */
     public function DoUninstall()
     {
+        global $APPLICATION;
+
+        $request = Application::getInstance()->getContext()->getRequest();
+        if ((int)$request->get('step') < 2) {
+            $APPLICATION->IncludeAdminFile(Loc::getMessage('IBEXPORT_UNINSTALL_TITLE'), __DIR__ . '/unstep1.php');
+        }
+        if (!check_bitrix_sessid()) {
+            return false;
+        }
+
+        if (Loader::includeModule($this->MODULE_ID)) {
+            \Vspace\Ibexport\TmpStorage::deleteAll();
+        }
+
         $this->UnInstallEvents();
         $this->UnInstallFiles();
-        $this->UnInstallDB();
-
-        if (method_exists(Loader::class, 'unRegisterAutoLoadClasses')) {
-            Loader::unRegisterAutoLoadClasses($this->MODULE_ID);
+        $this->UnInstallTasks();
+        if ($request->get('savedata') !== 'Y') {
+            $this->UnInstallDB();
+            Option::delete($this->MODULE_ID);
         }
 
         ModuleManager::unRegisterModule($this->MODULE_ID);
+
+        $APPLICATION->IncludeAdminFile(Loc::getMessage('IBEXPORT_UNINSTALL_TITLE'), __DIR__ . '/unstep2.php');
 
         return true;
     }

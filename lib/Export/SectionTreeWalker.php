@@ -14,8 +14,9 @@ use Vspace\Ibexport\XmlStreamWriter;
  *
  * Кадр стека (ExportFrame) — один раздел в обработке; каждый проход цикла
  * делает ровно один шаг над верхним кадром: открыть раздел -> страницами
- * выгрузить его элементы -> перебрать подразделы (для каждого — новый кадр)
- * -> закрыть.
+ * выгрузить его элементы -> страницами перебрать подразделы (для каждого —
+ * новый кадр) -> закрыть. Размер страницы и для элементов, и для подразделов —
+ * ExportContext::$batchSize.
  */
 final class SectionTreeWalker
 {
@@ -65,7 +66,7 @@ final class SectionTreeWalker
 
                 $ids = $this->source->getElementIdsPage($ctx->iblockId, $frame->sectionId, $ctx->activeOnly, $ctx->batchSize, $frame->elementsOffset);
                 foreach ($ids as $id) {
-                    $this->elements->writeRow($w, $id);
+                    $this->elements->writeRow($w, $id, false, $frame->sectionId);
                     $processedElements++;
                 }
                 $frame->elementsOffset += count($ids);
@@ -80,9 +81,9 @@ final class SectionTreeWalker
                     $this->sections->writeSubsectionStubs($w, $ctx->iblockId, $frame->sectionId, $ctx->activeOnly);
                     $frame->phase = ExportFrame::PHASE_DONE;
                 } elseif ($frame->childrenIds === null) {
-                    $frame->childrenIds = $this->source->getChildSectionIds($ctx->iblockId, $frame->sectionId, $ctx->activeOnly);
+                    $frame->childrenIds = $this->source->getChildSectionIds($ctx->iblockId, $frame->sectionId, $ctx->activeOnly, $ctx->batchSize, $frame->childrenOffset);
                     $frame->childrenIndex = 0;
-                    if (!empty($frame->childrenIds)) {
+                    if (!empty($frame->childrenIds) && !$frame->sectionsTagOpen) {
                         $w->openTag('sections');
                         $frame->sectionsTagOpen = true;
                     }
@@ -90,6 +91,10 @@ final class SectionTreeWalker
                     $childId = $frame->childrenIds[$frame->childrenIndex];
                     $frame->childrenIndex++;
                     $stack[] = new ExportFrame($childId);
+                } elseif (count($frame->childrenIds) >= $ctx->batchSize) {
+                    // страница была полной — за ней может быть следующая
+                    $frame->childrenOffset += count($frame->childrenIds);
+                    $frame->childrenIds = null;
                 } else {
                     if ($frame->sectionsTagOpen) {
                         $w->closeTag('sections');

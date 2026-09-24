@@ -2,7 +2,10 @@
 
 namespace Vspace\Ibexport\YandexDisk\Http;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Реализация TransportInterface на штатном HTTP-клиенте ядра
@@ -78,7 +81,7 @@ class BitrixHttpTransport implements TransportInterface
     private function requestFollowingRedirects(string $method, string $url, array $headers, ?string $body, int $depth): array
     {
         if ($depth > self::MAX_REDIRECTS) {
-            return ['status' => 0, 'body' => 'Превышено допустимое число перенаправлений.'];
+            return ['status' => 0, 'body' => Loc::getMessage('IBX_YADISK_HTTP_TOO_MANY_REDIRECTS')];
         }
 
         $http = $this->newClient($headers);

@@ -18,10 +18,11 @@ final class InMemoryTreeSource implements TreeSourceInterface
     {
     }
 
-    public function getChildSectionIds(int $iblockId, int $parentId, bool $activeOnly): array
+    public function getChildSectionIds(int $iblockId, int $parentId, bool $activeOnly, int $limit = 0, int $offset = 0): array
     {
-        $this->calls[] = ['children', $parentId, 0];
-        return $this->children[$parentId] ?? [];
+        $this->calls[] = ['children', $parentId, $offset];
+        $ids = $this->children[$parentId] ?? [];
+        return $limit > 0 ? array_slice($ids, $offset, $limit) : $ids;
     }
 
     public function getElementIdsPage(int $iblockId, int $sectionId, bool $activeOnly, int $limit, int $offset): array

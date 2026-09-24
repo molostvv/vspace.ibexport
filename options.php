@@ -1,77 +1,123 @@
 <?php
-
-require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
+/**
+ * Настройки модуля (Настройки → Настройки продукта → Настройки модулей). Подключается из
+ * bitrix/modules/main/admin/settings.php — пролог админки там уже подключён, а вывод буферизуется,
+ * поэтому после сохранения работает LocalRedirect(). Вкладки — CAdminTabControl, значения —
+ * \Bitrix\Main\Config\Option (читает lib/Options.php), вкладка "Доступ" — штатная group_rights2.php
+ * (уровни доступа — задачи модуля, install/index.php GetModuleTasks()).
+ *
+ * Свои переменные — с префиксом $vibx: файл выполняется в глобальной области вместе с group_rights2.php.
+ *
+ * @global CMain $APPLICATION
+ * @global CUser $USER
+ */
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Admin\AdminMessages;
 
-$moduleId = 'vspace.ibexport';
-
-if (!Loader::includeModule($moduleId)) {
-    return;
-}
-
-IncludeModuleLangFile(__FILE__);
-
-global $APPLICATION, $USER;
-
-if (!$USER->IsAdmin()) {
-    $APPLICATION->AuthForm(GetMessage('ACCESS_DENIED'));
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
     die();
 }
 
-$fields = ['BATCH_SIZE', 'SYNC_THRESHOLD', 'TICK_BUDGET', 'TTL_HOURS', 'DEFAULT_WITH_FILES', 'DEFAULT_ACTIVE_ONLY', 'DEFAULT_UPDATE_BY_CODE'];
+$module_id = 'vspace.ibexport'; // это имя переменной ожидает group_rights2.php
 
-if (($_REQUEST['Update'] ?? '') === 'Y' && check_bitrix_sessid()) {
-    Option::set($moduleId, 'BATCH_SIZE', (int)($_REQUEST['BATCH_SIZE'] ?? 0));
-    Option::set($moduleId, 'SYNC_THRESHOLD', (int)($_REQUEST['SYNC_THRESHOLD'] ?? 0));
-    Option::set($moduleId, 'TICK_BUDGET', (int)($_REQUEST['TICK_BUDGET'] ?? 0));
-    Option::set($moduleId, 'TTL_HOURS', (int)($_REQUEST['TTL_HOURS'] ?? 0));
-    Option::set($moduleId, 'DEFAULT_WITH_FILES', ($_REQUEST['DEFAULT_WITH_FILES'] ?? '') === 'Y' ? 'Y' : 'N');
-    Option::set($moduleId, 'DEFAULT_ACTIVE_ONLY', ($_REQUEST['DEFAULT_ACTIVE_ONLY'] ?? '') === 'Y' ? 'Y' : 'N');
-    Option::set($moduleId, 'DEFAULT_UPDATE_BY_CODE', ($_REQUEST['DEFAULT_UPDATE_BY_CODE'] ?? '') === 'Y' ? 'Y' : 'N');
+if (!$USER->IsAdmin() || !Loader::includeModule($module_id)) {
+    return;
 }
 
+IncludeModuleLangFile($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/main/options.php');
+IncludeModuleLangFile(__FILE__);
+
+/** Числовые параметры: код => [по умолчанию, минимум, максимум] (умолчания — как в lib/Options.php). */
+$vibxNumeric = [
+    'BATCH_SIZE' => [200, 1, 5000],
+    'SYNC_THRESHOLD' => [300, 1, 1000000],
+    'TICK_BUDGET' => [12, 1, 300],
+    'TTL_HOURS' => [24, 1, 8760],
+];
+/** Флажки: код => значение по умолчанию. */
+$vibxCheckboxes = [
+    'DEFAULT_WITH_FILES' => 'Y',
+    'DEFAULT_ACTIVE_ONLY' => 'N',
+    'DEFAULT_UPDATE_BY_CODE' => 'Y',
+];
+
 $tabControl = new CAdminTabControl('tabControl', [
-    ['DIV' => 'edit1', 'TAB' => GetMessage('MAIN_TAB_SET'), 'TITLE' => GetMessage('MAIN_TAB_TITLE')],
+    ['DIV' => 'edit1', 'TAB' => GetMessage('IBEXPORT_OPT_TAB_SETTINGS'), 'TITLE' => GetMessage('IBEXPORT_OPT_TAB_SETTINGS_TITLE')],
+    ['DIV' => 'edit2', 'TAB' => GetMessage('IBEXPORT_OPT_TAB_RIGHTS'), 'TITLE' => GetMessage('IBEXPORT_OPT_TAB_RIGHTS_TITLE')],
 ]);
+
+$vibxRequest = Context::getCurrent()->getRequest();
+$vibxErrors = [];
+$vibxPosted = []; // введённые значения — чтобы при ошибке показать их, а не сохранённые
+
+if (
+    $vibxRequest->isPost()
+    && ((string)$vibxRequest->getPost('Update') !== '' || (string)$vibxRequest->getPost('Apply') !== '')
+    && check_bitrix_sessid()
+) {
+    foreach ($vibxNumeric as $vibxCode => [$vibxDefault, $vibxMin, $vibxMax]) {
+        $vibxPosted[$vibxCode] = trim((string)$vibxRequest->getPost($vibxCode));
+        if (!preg_match('/^\d+$/', $vibxPosted[$vibxCode]) || (int)$vibxPosted[$vibxCode] < $vibxMin || (int)$vibxPosted[$vibxCode] > $vibxMax) {
+            $vibxErrors[] = GetMessage('IBEXPORT_OPT_ERR_RANGE', [
+                '#NAME#' => GetMessage('IBEXPORT_OPT_' . $vibxCode),
+                '#MIN#' => $vibxMin,
+                '#MAX#' => $vibxMax,
+            ]);
+        }
+    }
+
+    if (!$vibxErrors) {
+        foreach ($vibxNumeric as $vibxCode => $vibxRange) {
+            Option::set($module_id, $vibxCode, (string)(int)$vibxPosted[$vibxCode]);
+        }
+        foreach ($vibxCheckboxes as $vibxCode => $vibxDefault) {
+            Option::set($module_id, $vibxCode, $vibxRequest->getPost($vibxCode) === 'Y' ? 'Y' : 'N');
+        }
+
+        // Уровни доступа групп с вкладки "Доступ" сохраняет штатный обработчик (ему нужна переменная $Update).
+        $Update = 'Y';
+        ob_start();
+        require_once $_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/main/admin/group_rights2.php';
+        ob_end_clean();
+
+        // Post/Redirect/Get: обновление страницы после сохранения не отправит форму повторно.
+        LocalRedirect($APPLICATION->GetCurPage() . '?mid=' . urlencode($module_id) . '&lang=' . urlencode(LANGUAGE_ID) . '&' . $tabControl->ActiveTabParam());
+    }
+}
+
+AdminMessages::showErrors($vibxErrors);
 ?>
-<form method="post" action="<?= $APPLICATION->GetCurPage() ?>?mid=<?= $moduleId ?>&lang=<?= LANGUAGE_ID ?>">
+<form method="post" action="<?= $APPLICATION->GetCurPage() ?>?mid=<?= urlencode($module_id) ?>&amp;lang=<?= LANGUAGE_ID ?>">
     <?php $tabControl->Begin(); ?>
-    <?= bitrix_sessid_post() ?>
     <?php $tabControl->BeginNextTab(); ?>
 
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_BATCH_SIZE') ?></td>
-        <td><input type="text" size="6" name="BATCH_SIZE" value="<?= (int)Option::get($moduleId, 'BATCH_SIZE', 200) ?>"></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_SYNC_THRESHOLD') ?></td>
-        <td><input type="text" size="6" name="SYNC_THRESHOLD" value="<?= (int)Option::get($moduleId, 'SYNC_THRESHOLD', 300) ?>"></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_TICK_BUDGET') ?></td>
-        <td><input type="text" size="6" name="TICK_BUDGET" value="<?= (int)Option::get($moduleId, 'TICK_BUDGET', 12) ?>"></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_TTL_HOURS') ?></td>
-        <td><input type="text" size="6" name="TTL_HOURS" value="<?= (int)Option::get($moduleId, 'TTL_HOURS', 24) ?>"></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_DEFAULT_WITH_FILES') ?></td>
-        <td><input type="checkbox" name="DEFAULT_WITH_FILES" value="Y" <?= Option::get($moduleId, 'DEFAULT_WITH_FILES', 'Y') === 'Y' ? 'checked' : '' ?>></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_DEFAULT_ACTIVE_ONLY') ?></td>
-        <td><input type="checkbox" name="DEFAULT_ACTIVE_ONLY" value="Y" <?= Option::get($moduleId, 'DEFAULT_ACTIVE_ONLY', 'N') === 'Y' ? 'checked' : '' ?>></td>
-    </tr>
-    <tr>
-        <td><?= GetMessage('IBEXPORT_OPT_DEFAULT_UPDATE_BY_CODE') ?></td>
-        <td><input type="checkbox" name="DEFAULT_UPDATE_BY_CODE" value="Y" <?= Option::get($moduleId, 'DEFAULT_UPDATE_BY_CODE', 'Y') === 'Y' ? 'checked' : '' ?>></td>
-    </tr>
+    <?php foreach ($vibxNumeric as $vibxCode => [$vibxDefault, $vibxMin, $vibxMax]): ?>
+        <tr>
+            <td width="50%"><label for="vibx_<?= $vibxCode ?>"><?= GetMessage('IBEXPORT_OPT_' . $vibxCode) ?></label></td>
+            <td width="50%">
+                <input type="text" size="8" id="vibx_<?= $vibxCode ?>" name="<?= $vibxCode ?>"
+                       value="<?= htmlspecialcharsbx($vibxPosted[$vibxCode] ?? Option::get($module_id, $vibxCode, (string)$vibxDefault)) ?>">
+                <?= GetMessage('IBEXPORT_OPT_RANGE_HINT', ['#MIN#' => $vibxMin, '#MAX#' => $vibxMax]) ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    <?php foreach ($vibxCheckboxes as $vibxCode => $vibxDefault): ?>
+        <?php $vibxChecked = $vibxPosted ? $vibxRequest->getPost($vibxCode) === 'Y' : Option::get($module_id, $vibxCode, $vibxDefault) === 'Y'; ?>
+        <tr>
+            <td width="50%"><label for="vibx_<?= $vibxCode ?>"><?= GetMessage('IBEXPORT_OPT_' . $vibxCode) ?></label></td>
+            <td width="50%"><input type="checkbox" id="vibx_<?= $vibxCode ?>" name="<?= $vibxCode ?>" value="Y" <?= $vibxChecked ? 'checked' : '' ?>></td>
+        </tr>
+    <?php endforeach; ?>
+
+    <?php $tabControl->BeginNextTab(); ?>
+    <?php require_once $_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/main/admin/group_rights2.php'; ?>
 
     <?php $tabControl->Buttons(); ?>
-    <input type="hidden" name="Update" value="Y">
-    <input type="submit" value="<?= GetMessage('MAIN_SAVE') ?>" class="adm-btn-save">
+    <input type="submit" name="Update" value="<?= GetMessage('MAIN_SAVE') ?>" class="adm-btn-save">
+    <input type="submit" name="Apply" value="<?= GetMessage('MAIN_OPT_APPLY') ?>">
+    <?= bitrix_sessid_post() ?>
     <?php $tabControl->End(); ?>
 </form>

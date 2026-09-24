@@ -71,8 +71,9 @@ final class TraversalFrameTest extends TestCase
 
     public function testExportFrameArrayKeysAndOrderMatchTheHistoricalFormat(): void
     {
+        // исторические ключи — в прежнем порядке, новые (children_offset, 1.1.0) — в конце
         $this->assertSame(
-            ['section_id', 'opened', 'phase', 'elements_offset', 'elements_tag_open', 'children_ids', 'children_index', 'sections_tag_open'],
+            ['section_id', 'opened', 'phase', 'elements_offset', 'elements_tag_open', 'children_ids', 'children_index', 'sections_tag_open', 'children_offset'],
             array_keys((new ExportFrame(1))->toArray())
         );
     }
@@ -85,7 +86,7 @@ final class TraversalFrameTest extends TestCase
         );
     }
 
-    public function testLegacyExportStateIsReadableAndRewritesByteForByte(): void
+    public function testLegacyExportStateIsReadableAndRewritesWithOnlyTheNewKeyAppended(): void
     {
         $state = json_decode(self::LEGACY_EXPORT_STATE, true);
 
@@ -98,7 +99,11 @@ final class TraversalFrameTest extends TestCase
         $this->assertSame(461, $stack[0]->elementsOffset);
         $this->assertTrue($stack[0]->elementsTagOpen);
         $this->assertNull($stack[0]->childrenIds);
-        $this->assertSame(self::LEGACY_EXPORT_STATE, json_encode(['stack' => ExportFrame::stackToArray($stack)]));
+        $this->assertSame(0, $stack[0]->childrenOffset, 'в прежнем состоянии подразделы — одна "страница" с нуля');
+        $this->assertSame(
+            str_replace('"sections_tag_open":false}', '"sections_tag_open":false,"children_offset":0}', self::LEGACY_EXPORT_STATE),
+            json_encode(['stack' => ExportFrame::stackToArray($stack)])
+        );
     }
 
     public function testLegacyImportStateIsReadableAndRewritesByteForByte(): void
