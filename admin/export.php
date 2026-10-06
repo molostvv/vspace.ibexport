@@ -72,7 +72,31 @@ $tabControl = new CAdminTabControl('tabControl', [
     </tr>
     <tr>
         <td><?= GetMessage('IBEXPORT_FIELD_ID') ?></td>
-        <td><input type="text" size="30" name="ENTITY_REF" value="<?= htmlspecialcharsbx($entityRef) ?>"></td>
+        <td>
+            <?php
+            // Штатные окна поиска Битрикса (iblock_element_search.php / iblock_section_search.php) — как у полей привязки
+            // в ядре: n — id поля, куда окно запишет ID выбранной записи; в span sp_<n> оно выводит её название;
+            // iblockfix=y — искать только в выбранном инфоблоке. Какое окно открыть — по текущему "Тип сущности".
+            ?>
+            <input type="text" size="30" name="ENTITY_REF" id="vibx_entity_ref" value="<?= htmlspecialcharsbx($entityRef) ?>"
+                   oninput="BX('sp_vibx_entity_ref').innerHTML = '';">
+            <input type="button" value="..." title="<?= htmlspecialcharsbx(GetMessage('IBEXPORT_SEARCH_TITLE')) ?>" onclick="vibxOpenEntitySearch();">
+            <span id="sp_vibx_entity_ref"></span>
+            <script>
+                function vibxOpenEntitySearch() {
+                    var form = document.getElementById('vibx_export_form');
+                    var iblockId = parseInt(form.elements['IBLOCK_ID'].value, 10);
+                    if (!(iblockId > 0)) {
+                        alert('<?= \CUtil::JSEscape(GetMessage('IBEXPORT_SEARCH_NO_IBLOCK')) ?>');
+                        return;
+                    }
+                    var type = form.querySelector('input[name="ENTITY_TYPE"]:checked');
+                    var script = type && type.value === 'section' ? 'iblock_section_search.php' : 'iblock_element_search.php';
+                    jsUtils.OpenWindow('/bitrix/admin/' + script + '?lang=<?= LANGUAGE_ID ?>&IBLOCK_ID=' + iblockId
+                        + '&iblockfix=y&n=vibx_entity_ref&tableId=vibx_export_' + script.replace('.php', ''), 900, 700);
+                }
+            </script>
+        </td>
     </tr>
     <tr>
         <td><?= GetMessage('IBEXPORT_FIELD_MODE') ?></td>
@@ -121,7 +145,7 @@ $tabControl = new CAdminTabControl('tabControl', [
 <?php endif; ?>
 
 <?php
-// Последние добавленные элементы и разделы выбранного инфоблока — для быстрого экспорта без поиска ID. Списки —
+// Последние изменённые (в том числе новые) элементы и разделы выбранного инфоблока — для быстрого экспорта без поиска ID. Списки —
 // штатный CAdminList (данные — массив из контроллера, без сортировки/фильтров/постраничности). Кнопки отправляют
 // основную форму (атрибут form): галки и режим — те, что в форме сейчас; сущность и действие — в formaction
 // (QUICK_ENTITY, QUICK_ACTION, см. ExportPageController). "Рассчитать объём" (только у разделов — элемент всегда
@@ -145,7 +169,7 @@ if ($recent === null): ?>
             ['id' => 'CODE', 'content' => GetMessage('IBEXPORT_RECENT_COL_CODE'), 'default' => true],
             ['id' => 'SECTION', 'content' => GetMessage($kind === 'element' ? 'IBEXPORT_RECENT_COL_SECTION' : 'IBEXPORT_RECENT_COL_PARENT'), 'default' => true],
             ['id' => 'ACTIVE', 'content' => GetMessage('IBEXPORT_RECENT_COL_ACTIVE'), 'default' => true],
-            ['id' => 'DATE_CREATE', 'content' => GetMessage('IBEXPORT_RECENT_COL_CREATED'), 'default' => true],
+            ['id' => 'TIMESTAMP_X', 'content' => GetMessage('IBEXPORT_RECENT_COL_CHANGED'), 'default' => true],
             ['id' => 'EXPORT', 'content' => '', 'default' => true],
         ]);
         foreach ($rows as $r) {
@@ -157,7 +181,7 @@ if ($recent === null): ?>
             $row->AddViewField('CODE', htmlspecialcharsbx((string)$r['CODE']));
             $row->AddViewField('SECTION', $r['SECTION_ID'] ? '[' . (int)$r['SECTION_ID'] . '] ' . htmlspecialcharsbx($r['SECTION_NAME']) : '');
             $row->AddViewField('ACTIVE', GetMessage($r['ACTIVE'] === 'Y' ? 'IBEXPORT_RECENT_YES' : 'IBEXPORT_RECENT_NO'));
-            $row->AddViewField('DATE_CREATE', $r['DATE_CREATE'] ? htmlspecialcharsbx($r['DATE_CREATE']->toString()) : '');
+            $row->AddViewField('TIMESTAMP_X', $r['TIMESTAMP_X'] ? htmlspecialcharsbx($r['TIMESTAMP_X']->toString()) : '');
             $row->AddViewField('EXPORT', '<span class="vibx-nowrap">'
                 . ($kind === 'section' ? $quickButton($kind, $id, 'estimate', GetMessage('IBEXPORT_RECENT_BTN_ESTIMATE')) . ' ' : '')
                 . $quickButton($kind, $id, 'run', GetMessage('IBEXPORT_RECENT_BTN'))

@@ -23,7 +23,7 @@ use Vspace\Ibexport\Rights;
  */
 final class ExportPageController
 {
-    /** Сколько последних добавленных элементов и разделов показывать под формой. */
+    /** Сколько последних изменённых (в том числе новых) элементов и разделов показывать под формой. */
     public const RECENT_LIMIT = 10;
 
     /**
@@ -39,9 +39,9 @@ final class ExportPageController
      *     activeOnly: bool,
      *     recent: array{elements: array[], sections: array[]}|null
      * }
-     *  recent — последние добавленные элементы и разделы выбранного инфоблока (null — инфоблок не выбран
-     *  или недоступен): строки ID, NAME, CODE, ACTIVE, DATE_CREATE и раздел (SECTION_ID, SECTION_NAME — основной
-     *  раздел элемента либо родитель раздела).
+     *  recent — последние изменённые (в том числе новые) элементы и разделы выбранного инфоблока (null — инфоблок
+     *  не выбран или недоступен): строки ID, NAME, CODE, ACTIVE, TIMESTAMP_X и раздел (SECTION_ID, SECTION_NAME —
+     *  основной раздел элемента либо родитель раздела).
      */
     public function handle(HttpRequest $request): array
     {
@@ -134,19 +134,22 @@ final class ExportPageController
         ];
     }
 
-    /** Последние добавленные (по дате создания) элементы и разделы инфоблока — для быстрого экспорта без поиска. */
+    /**
+     * Последние изменённые элементы и разделы инфоблока (по дате изменения: новые записи туда тоже попадают) — для
+     * быстрого экспорта без поиска: переносить обычно нужно как раз то, что только что создали или поправили.
+     */
     private function recent(int $iblockId): array
     {
         $elements = ElementTable::getList([
             'filter' => ['=IBLOCK_ID' => $iblockId],
-            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'DATE_CREATE', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
-            'order' => ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
+            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'TIMESTAMP_X', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
+            'order' => ['TIMESTAMP_X' => 'DESC', 'ID' => 'DESC'],
             'limit' => self::RECENT_LIMIT,
         ])->fetchAll();
         $sections = SectionTable::getList([
             'filter' => ['=IBLOCK_ID' => $iblockId],
-            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'DATE_CREATE', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
-            'order' => ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
+            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'TIMESTAMP_X', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
+            'order' => ['TIMESTAMP_X' => 'DESC', 'ID' => 'DESC'],
             'limit' => self::RECENT_LIMIT,
         ])->fetchAll();
 
