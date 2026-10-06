@@ -7,6 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use CIBlockSection;
 use SimpleXMLElement;
 use Vspace\Ibexport\DateValue;
+use Vspace\Ibexport\SeoTemplates;
 
 Loc::loadMessages(__FILE__);
 
@@ -64,6 +65,7 @@ class SectionImporter extends AbstractNodeImporter
                 $report->skipped++;
                 return $existingId;
             }
+            $fields += $this->seoFields($node, SeoTemplates::ENTITY_SECTION, $iblockId, $existingId, $report);
             $section = new CIBlockSection();
             if ($section->Update($existingId, $fields)) {
                 $report->updated++;
@@ -78,6 +80,7 @@ class SectionImporter extends AbstractNodeImporter
         if (isset($match['XML_ID'])) {
             $fields['XML_ID'] = $match['XML_ID']; // без этого повторный импорт снова не найдёт запись
         }
+        $fields += $this->seoFields($node, SeoTemplates::ENTITY_SECTION, $iblockId, null, $report);
         $section = new CIBlockSection();
         $newId = $section->Add($fields);
         if (!$newId) {

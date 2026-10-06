@@ -8,12 +8,13 @@ use Bitrix\Main\Localization\Loc;
 use CIBlockElement;
 use CIBlockSection;
 use Vspace\Ibexport\DateValue;
+use Vspace\Ibexport\SeoTemplates;
 use Vspace\Ibexport\XmlStreamWriter;
 
 Loc::loadMessages(__FILE__);
 
 /**
- * Читает элемент (поля, свойства, файлы, привязки к разделам) из БД и пишет его XML-узел (docs/xml-format.md, "Элементы").
+ * Читает элемент (поля, свойства, файлы, привязки к разделам, SEO-шаблоны) из БД и пишет его XML-узел (docs/xml-format.md, "Элементы").
  *
  * Поля читаются через Fetch(), а не GetNext(): GetNext() готовит значения к выводу в HTML (название с кавычкой
  * становится &quot;, текст типа text — HTML с <br />), и в архив попадали бы уже искажённые данные. Права не
@@ -95,6 +96,7 @@ class ElementWriter
         }
 
         $this->writeProperties($w, (int)$el['IBLOCK_ID'], $elementId);
+        SeoTemplates::write($w, SeoTemplates::load((int)$el['IBLOCK_ID'], SeoTemplates::ENTITY_ELEMENT, $elementId));
 
         $w->closeTag('element');
     }

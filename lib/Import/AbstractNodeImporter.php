@@ -4,10 +4,11 @@ namespace Vspace\Ibexport\Import;
 
 use Bitrix\Main\Localization\Loc;
 use SimpleXMLElement;
+use Vspace\Ibexport\SeoTemplates;
 
 Loc::loadMessages(__FILE__);
 
-/** Общее для импортёров разделов и элементов: чтение атрибутов узла, поиск существующей записи по CODE, файловые поля. */
+/** Общее для импортёров разделов и элементов: чтение атрибутов узла, поиск существующей записи по CODE, файловые поля, SEO-шаблоны. */
 abstract class AbstractNodeImporter
 {
     public function __construct(protected FileArrayFactoryInterface $files)
@@ -85,6 +86,29 @@ abstract class AbstractNodeImporter
         ])->fetchAll();
 
         return ['id' => $rows ? (int)$rows[0]['ID'] : null, 'ambiguous' => count($rows) > 1];
+    }
+
+    /**
+     * IPROPERTY_TEMPLATES для Add()/Update() из блока <seo> записи (SeoTemplates): собственные шаблоны записи становятся
+     * такими же, как в источнике. Архив без <seo> (до версии 1.2.0) — поле не передаётся, шаблоны не меняются.
+     *
+     * @param string $entityType SeoTemplates::ENTITY_ELEMENT либо ENTITY_SECTION
+     * @param int|null $existingId обновляемая запись (null — создаётся новая)
+     */
+    protected function seoFields(SimpleXMLElement $node, string $entityType, int $iblockId, ?int $existingId, ImportReport $report): array
+    {
+        $parsed = SeoTemplates::parse($node, $entityType);
+        if ($parsed === null) {
+            return [];
+        }
+        foreach ($parsed['rejected'] as $code) {
+            $report->addWarning(Loc::getMessage('IBX_NODE_BAD_SEO_CODE', ['#CODE#' => $code]));
+        }
+
+        $currentCodes = $existingId !== null ? array_keys(SeoTemplates::load($iblockId, $entityType, $existingId)) : [];
+        $templates = SeoTemplates::forSave($parsed['templates'], $currentCodes);
+
+        return $templates ? ['IPROPERTY_TEMPLATES' => $templates] : [];
     }
 
     /**

@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use CIBlockElement;
 use SimpleXMLElement;
 use Vspace\Ibexport\DateValue;
+use Vspace\Ibexport\SeoTemplates;
 
 Loc::loadMessages(__FILE__);
 
@@ -75,7 +76,8 @@ class ElementImporter extends AbstractNodeImporter
         }
 
         [$sectionIds, $mainId] = $this->archiveSections($node, $sectionId, $mainSectionId, $ctx, $report, $withSections);
-        $fields = $this->readFields($node, $ctx, true) + $this->sectionFields($existingId, $sectionIds, $mainId);
+        $fields = $this->readFields($node, $ctx, true) + $this->sectionFields($existingId, $sectionIds, $mainId)
+            + $this->seoFields($node, SeoTemplates::ENTITY_ELEMENT, $ctx->iblockId, $existingId, $report);
         $this->applyFileField($fields, 'PREVIEW_PICTURE', $node->preview_picture, $ctx, $report);
         $this->applyFileField($fields, 'DETAIL_PICTURE', $node->detail_picture, $ctx, $report);
 
@@ -93,7 +95,8 @@ class ElementImporter extends AbstractNodeImporter
     private function create(SimpleXMLElement $node, ?int $sectionId, ?int $mainSectionId, ?array $match, ?string $marker, ImportContext $ctx, ImportReport $report, bool $withSections): void
     {
         [$sectionIds, $mainId] = $this->archiveSections($node, $sectionId, $mainSectionId, $ctx, $report, $withSections);
-        $fields = $this->readFields($node, $ctx, false) + $this->sectionFields(null, $sectionIds, $mainId);
+        $fields = $this->readFields($node, $ctx, false) + $this->sectionFields(null, $sectionIds, $mainId)
+            + $this->seoFields($node, SeoTemplates::ENTITY_ELEMENT, $ctx->iblockId, null, $report);
         if (isset($match['XML_ID'])) {
             $fields['XML_ID'] = $match['XML_ID']; // без этого повторный импорт снова не найдёт запись
         }

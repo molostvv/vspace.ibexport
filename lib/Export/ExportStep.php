@@ -20,9 +20,15 @@ final class ExportStep
     /**
      * Версия формата export.xml (атрибут version корня; docs/xml-format.md). 2 — с версии модуля 1.1.0: значения
      * без HTML-экранирования, даты в ISO 8601, ключи связанных записей у свойств-привязок, описания значений,
-     * main_section у элементов. В архивах прежних версий атрибута нет.
+     * main_section у элементов. 3 — с версии 1.2.0: SEO-шаблоны записей (<seo>). В архивах до 1.1.0 атрибута нет.
      */
-    public const FORMAT_VERSION = 2;
+    public const FORMAT_VERSION = 3;
+
+    /** Первая версия формата без HTML-экранирования значений; архивы старее страница импорта помечает как устаревшие. */
+    public const FORMAT_VERSION_UNESCAPED = 2;
+
+    /** Первая версия формата с SEO-шаблонами; в архивах старее их нет, и импорт SEO записей не меняет. */
+    public const FORMAT_VERSION_SEO = 3;
 
     public function __construct(private JobEventLog $eventLog)
     {

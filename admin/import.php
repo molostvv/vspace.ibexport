@@ -108,8 +108,11 @@ $tabControl = new CAdminTabControl('tabControl', [
                         '#ELEMENTS#' => $prepared['elements'],
                     ]) ?>
                 </div>
-                <?php if ((int)($prepared['format_version'] ?? 0) < ExportStep::FORMAT_VERSION): ?>
+                <?php $formatVersion = (int)($prepared['format_version'] ?? 0); ?>
+                <?php if ($formatVersion < ExportStep::FORMAT_VERSION_UNESCAPED): ?>
                     <div class="vibx-note errortext"><?= GetMessage('IBIMPORT_LEGACY_FORMAT') ?></div>
+                <?php elseif ($formatVersion < ExportStep::FORMAT_VERSION_SEO): ?>
+                    <div class="vibx-note"><?= GetMessage('IBIMPORT_NO_SEO') ?></div>
                 <?php endif; ?>
                 <?php if (!empty($prepared['ignored_entries'])): ?>
                     <div class="vibx-note"><?= GetMessage('IBIMPORT_IGNORED_ENTRIES', ['#COUNT#' => (int)$prepared['ignored_entries']]) ?></div>

@@ -6,6 +6,7 @@ use Bitrix\Iblock\SectionTable;
 use Bitrix\Main\Localization\Loc;
 use CIBlockSection;
 use Vspace\Ibexport\DateValue;
+use Vspace\Ibexport\SeoTemplates;
 use Vspace\Ibexport\XmlStreamWriter;
 
 Loc::loadMessages(__FILE__);
@@ -25,7 +26,7 @@ class SectionWriter
     }
 
     /**
-     * Открывает <section> и пишет его поля, картинку и UF_*-свойства; закрывающий
+     * Открывает <section> и пишет его поля, картинку, UF_*-свойства и SEO-шаблоны; закрывающий
      * тег и вложенное содержимое (<elements>, <sections>) пишет обход дерева.
      */
     public function writeOpen(XmlStreamWriter $w, int $sectionId): void
@@ -49,6 +50,8 @@ class SectionWriter
         $w->openTag('properties');
         $this->writeUserFields($w, (int)$section['IBLOCK_ID'], $sectionId);
         $w->closeTag('properties');
+
+        SeoTemplates::write($w, SeoTemplates::load((int)$section['IBLOCK_ID'], SeoTemplates::ENTITY_SECTION, $sectionId));
     }
 
     /**
