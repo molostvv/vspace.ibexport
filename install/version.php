@@ -4,6 +4,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 }
 
 $arModuleVersion = [
-    'VERSION' => '1.2.0',
+    'VERSION' => '1.2.1',
     'VERSION_DATE' => '2026-10-06 00:00:00',
 ];

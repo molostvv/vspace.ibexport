@@ -26,16 +26,30 @@ class Client
     /** Лимит размера файла на бесплатном тарифе Яндекс.Диска (ТЗ, раздел 6/7). */
     public const MAX_FILE_SIZE = 1073741824; // 1 ГБ
 
+    /**
+     * Сколько раз пробовать передать файл по одноразовой ссылке, если запрос не дошёл до сервера (сетевой сбой).
+     * Каждая попытка — с новой ссылкой: Диск выдаёт её на разные узлы (uploader*, downloader*), и сбой одного узла
+     * или его DNS-записи (например, у сервера без IPv6 остался только IPv6-адрес узла) не повторяется.
+     */
+    public const TRANSFER_ATTEMPTS = 3;
+
     private string $token;
     private TransportInterface $transport;
 
-    public function __construct(string $token, ?TransportInterface $transport = null, int $timeout = 15)
+    /** @var \Closure(int): void пауза перед следующей попыткой, в секундах */
+    private \Closure $pause;
+
+    /** @param (\Closure(int): void)|null $pause пауза между попытками передачи файла (в тестах — без ожидания) */
+    public function __construct(string $token, ?TransportInterface $transport = null, int $timeout = 15, ?\Closure $pause = null)
     {
         if ($token === '') {
             throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_TOKEN'));
         }
         $this->token = $token;
         $this->transport = $transport ?? new BitrixHttpTransport($timeout);
+        $this->pause = $pause ?? static function (int $seconds): void {
+            sleep($seconds);
+        };
     }
 
     private function buildUrl(string $path, array $query = []): string
@@ -131,7 +145,10 @@ class Client
         }
     }
 
-    /** Двухшаговая загрузка (тест → Диск): получить upload-href, затем PUT содержимого файла по этому href. */
+    /**
+     * Двухшаговая загрузка (тест → Диск): получить upload-href, затем PUT содержимого файла по этому href.
+     * Сетевой сбой на PUT — до TRANSFER_ATTEMPTS попыток, каждая с новой ссылкой.
+     */
     public function uploadFile(string $diskPath, string $localFilePath, bool $overwrite = false): void
     {
         if (!is_file($localFilePath)) {
@@ -143,6 +160,37 @@ class Client
             throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_FILE_TOO_BIG'));
         }
 
+        $content = file_get_contents($localFilePath);
+        if ($content === false) {
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_READ_FAILED', ['#PATH#' => $localFilePath]));
+        }
+
+        for ($attempt = 1; ; $attempt++) {
+            $href = $this->uploadHref($diskPath, $overwrite);
+            // href уже содержит собственный временный токен доступа — заголовок
+            // авторизации Диска здесь не нужен (и не требуется API).
+            $uploadRes = $this->transport->request('PUT', $href, [], $content);
+            if ($uploadRes['status'] !== 0) {
+                break;
+            }
+            if ($attempt >= self::TRANSFER_ATTEMPTS) {
+                throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_UPLOAD_HREF_FAILED', [
+                    '#HREF#' => $this->hrefPreview($href),
+                    '#ATTEMPTS#' => $attempt,
+                    '#ERROR#' => $uploadRes['body'],
+                ]));
+            }
+            ($this->pause)($attempt);
+        }
+
+        if (!in_array($uploadRes['status'], [201, 202], true)) {
+            $this->throwApiError($uploadRes['status'], $uploadRes['body']);
+        }
+    }
+
+    /** GET /v1/disk/resources/upload — одноразовая ссылка для PUT содержимого файла. */
+    private function uploadHref(string $diskPath, bool $overwrite): string
+    {
         $res = $this->transport->request('GET', $this->buildUrl('/resources/upload', [
             'path' => $diskPath,
             'overwrite' => $overwrite ? 'true' : 'false',
@@ -157,20 +205,7 @@ class Client
             throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_UPLOAD_HREF'));
         }
 
-        $content = file_get_contents($localFilePath);
-        if ($content === false) {
-            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_READ_FAILED', ['#PATH#' => $localFilePath]));
-        }
-
-        // href уже содержит собственный временный токен доступа — заголовок
-        // авторизации Диска здесь не нужен (и не требуется API).
-        $uploadRes = $this->transport->request('PUT', $href, [], $content);
-        if ($uploadRes['status'] === 0) {
-            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_UPLOAD_HREF_FAILED', ['#HREF#' => $this->hrefPreview($href), '#ERROR#' => $uploadRes['body']]));
-        }
-        if (!in_array($uploadRes['status'], [201, 202], true)) {
-            $this->throwApiError($uploadRes['status'], $uploadRes['body']);
-        }
+        return $href;
     }
 
     /**
@@ -211,8 +246,35 @@ class Client
         return $files;
     }
 
-    /** Скачивание (Диск → прод): получить download-href, затем скачать содержимое по этому href в файл. */
+    /**
+     * Скачивание (Диск → прод): получить download-href, затем скачать содержимое по этому href в файл.
+     * Сетевой сбой при скачивании — до TRANSFER_ATTEMPTS попыток, каждая с новой ссылкой.
+     */
     public function downloadFile(string $diskPath, string $localFilePath): void
+    {
+        for ($attempt = 1; ; $attempt++) {
+            $href = $this->downloadHref($diskPath);
+            $status = $this->transport->downloadToFile($href, [], $localFilePath);
+            if ($status !== 0) {
+                break;
+            }
+            if ($attempt >= self::TRANSFER_ATTEMPTS) {
+                throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HREF_FAILED', [
+                    '#HREF#' => $this->hrefPreview($href),
+                    '#ATTEMPTS#' => $attempt,
+                ]));
+            }
+            ($this->pause)($attempt);
+        }
+
+        if ($status < 200 || $status >= 300) {
+            @unlink($localFilePath);
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HTTP_ERROR', ['#STATUS#' => $status]));
+        }
+    }
+
+    /** GET /v1/disk/resources/download — одноразовая ссылка для скачивания файла. */
+    private function downloadHref(string $diskPath): string
     {
         $res = $this->transport->request('GET', $this->buildUrl('/resources/download', ['path' => $diskPath]), $this->authHeaders());
         $this->throwOnTransportFailure($res);
@@ -225,13 +287,6 @@ class Client
             throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_NO_DOWNLOAD_HREF'));
         }
 
-        $status = $this->transport->downloadToFile($href, [], $localFilePath);
-        if ($status === 0) {
-            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HREF_FAILED', ['#HREF#' => $this->hrefPreview($href)]));
-        }
-        if ($status < 200 || $status >= 300) {
-            @unlink($localFilePath);
-            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_DOWNLOAD_HTTP_ERROR', ['#STATUS#' => $status]));
-        }
+        return $href;
     }
 }

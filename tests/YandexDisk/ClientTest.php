@@ -208,6 +208,66 @@ final class ClientTest extends TestCase
         $client->uploadFile('/vspace.ibexport/x.zip', $localFile);
     }
 
+    public function testUploadFileRetriesWithNewHrefAfterNetworkFailure(): void
+    {
+        $localFile = $this->makeTempFile(3);
+        $pauses = [];
+
+        $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader1.example/put']));
+        $this->transport->queueResponse(0, '[2] stream_socket_client(): Unable to connect (Network is unreachable)');
+        $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader2.example/put']));
+        $this->transport->queueResponse(201, '');
+
+        $client = new Client('token', $this->transport, 15, static function (int $seconds) use (&$pauses): void {
+            $pauses[] = $seconds;
+        });
+        $client->uploadFile('/vspace.ibexport/x.zip', $localFile, true);
+
+        self::assertCount(4, $this->transport->calls);
+        self::assertSame('GET', $this->transport->calls[2]['method']);
+        self::assertSame('https://uploader2.example/put', $this->transport->calls[3]['url']);
+        self::assertSame([1], $pauses);
+    }
+
+    public function testUploadFileGivesUpAfterAllAttemptsFailOnNetwork(): void
+    {
+        $localFile = $this->makeTempFile(3);
+        $pauses = [];
+        for ($i = 0; $i < Client::TRANSFER_ATTEMPTS; $i++) {
+            $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader.example/put']));
+            $this->transport->queueResponse(0, 'Network is unreachable');
+        }
+
+        $client = new Client('token', $this->transport, 15, static function (int $seconds) use (&$pauses): void {
+            $pauses[] = $seconds;
+        });
+
+        try {
+            $client->uploadFile('/vspace.ibexport/x.zip', $localFile, true);
+            self::fail('Expected Exception was not thrown.');
+        } catch (Exception $e) {
+            self::assertStringContainsString('Network is unreachable', $e->getMessage());
+            self::assertStringContainsString((string)Client::TRANSFER_ATTEMPTS, $e->getMessage());
+        }
+        self::assertCount(2 * Client::TRANSFER_ATTEMPTS, $this->transport->calls);
+        self::assertSame(range(1, Client::TRANSFER_ATTEMPTS - 1), $pauses);
+    }
+
+    public function testUploadFileDoesNotRetryHttpErrors(): void
+    {
+        $localFile = $this->makeTempFile(1);
+
+        $this->transport->queueResponse(200, json_encode(['href' => 'https://uploader.example/put-here']));
+        $this->transport->queueResponse(500, '');
+
+        $client = new Client('token', $this->transport, 15, static function (): void {
+            self::fail('No pause expected: HTTP errors are not retried.');
+        });
+
+        $this->expectException(Exception::class);
+        $client->uploadFile('/vspace.ibexport/x.zip', $localFile);
+    }
+
     public function testListFilesFiltersOnlyFilesAndParsesFields(): void
     {
         $this->transport->queueResponse(200, json_encode([
@@ -271,6 +331,28 @@ final class ClientTest extends TestCase
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Resource not found');
         $client->downloadFile('/vspace.ibexport/missing.zip', sys_get_temp_dir() . '/unused.zip');
+    }
+
+    public function testDownloadFileRetriesWithNewHrefAfterNetworkFailure(): void
+    {
+        $destPath = sys_get_temp_dir() . '/yandex_disk_test_download_retry_' . uniqid() . '.zip';
+        $this->tempFiles[] = $destPath;
+        $pauses = [];
+
+        $this->transport->queueResponse(200, json_encode(['href' => 'https://downloader1.example/get']));
+        $this->transport->queueDownloadStatus(0);
+        $this->transport->queueResponse(200, json_encode(['href' => 'https://downloader2.example/get']));
+        $this->transport->queueDownloadStatus(200);
+        $this->transport->downloadWrittenContent = 'zip-bytes';
+
+        $client = new Client('token', $this->transport, 15, static function (int $seconds) use (&$pauses): void {
+            $pauses[] = $seconds;
+        });
+        $client->downloadFile('/vspace.ibexport/job17.zip', $destPath);
+
+        self::assertSame('zip-bytes', file_get_contents($destPath));
+        self::assertSame('https://downloader2.example/get', $this->transport->downloadCalls[1]['url']);
+        self::assertSame([1], $pauses);
     }
 
     public function testDownloadFileThrowsAndDoesNotLeaveFileWhenDownloadFails(): void
