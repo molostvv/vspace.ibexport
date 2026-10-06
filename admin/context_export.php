@@ -11,6 +11,7 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
+use Vspace\Ibexport\Options;
 
 Loader::includeModule('vspace.ibexport');
 
@@ -18,10 +19,17 @@ $iblockId = (int)($_REQUEST['IBLOCK_ID'] ?? 0);
 $entityType = in_array($_REQUEST['ENTITY_TYPE'] ?? '', ['element', 'section'], true) ? $_REQUEST['ENTITY_TYPE'] : 'element';
 $id = (int)($_REQUEST['ID'] ?? 0);
 
-$url = '/bitrix/admin/vspace_ibexport_export.php?lang=' . LANGUAGE_ID
-    . '&IBLOCK_ID=' . $iblockId
-    . '&ENTITY_TYPE=' . $entityType
-    . '&ENTITY_REF=' . $id
-    . '&STEP=estimate';
+// С STEP форма считается отправленной и читает галки из запроса (снятый чекбокс браузер не передаёт, см.
+// ExportPageController), поэтому значения по умолчанию из настроек модуля передаются явно — иначе "Выгружать файлы"
+// пришла бы снятой, и запуск с этой страницы выгружал архив без файлов.
+$url = '/bitrix/admin/vspace_ibexport_export.php?' . http_build_query([
+    'lang' => LANGUAGE_ID,
+    'IBLOCK_ID' => $iblockId,
+    'ENTITY_TYPE' => $entityType,
+    'ENTITY_REF' => $id,
+    'WITH_FILES' => Options::getDefaultWithFiles() ? 'Y' : '',
+    'ACTIVE_ONLY' => Options::getDefaultActiveOnly() ? 'Y' : '',
+    'STEP' => 'estimate',
+]);
 
 LocalRedirect($url);
