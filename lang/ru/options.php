@@ -11,5 +11,6 @@ $MESS['IBEXPORT_OPT_TTL_HOURS'] = 'Срок хранения временных 
 $MESS['IBEXPORT_OPT_DEFAULT_WITH_FILES'] = 'Выгружать файлы по умолчанию';
 $MESS['IBEXPORT_OPT_DEFAULT_ACTIVE_ONLY'] = 'Только активные по умолчанию';
 $MESS['IBEXPORT_OPT_DEFAULT_UPDATE_BY_CODE'] = 'Обновлять существующие по коду по умолчанию (импорт)';
+$MESS['IBEXPORT_OPT_YANDEX_DISK_AUTO_UPLOAD'] = 'Сразу выгружать архив экспорта на Яндекс.Диск (если Диск подключён)';
 $MESS['IBEXPORT_OPT_RANGE_HINT'] = '(#MIN#–#MAX#)';
 $MESS['IBEXPORT_OPT_ERR_RANGE'] = '"#NAME#": нужно целое число от #MIN# до #MAX#. Настройки не сохранены.';

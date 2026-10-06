@@ -3,11 +3,10 @@
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
 use Bitrix\Main\Loader;
-use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\JobTable;
 use Vspace\Ibexport\Options;
-use Vspace\Ibexport\YandexDisk\Client;
 use Vspace\Ibexport\YandexDisk\Exception;
+use Vspace\Ibexport\YandexDisk\JobUploader;
 use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
@@ -46,13 +45,8 @@ if (!Options::isYandexDiskEnabled() || !Settings::hasToken()) {
 }
 
 try {
-    $localPath = Exporter::getTmpDir($jobId) . '/' . $job['ARCHIVE_FILE'];
-    $folder = Settings::getFolder();
-    $diskPath = rtrim($folder, '/') . '/' . $job['ARCHIVE_FILE'];
-
-    $client = new Client(Settings::getToken());
-    $client->ensureFolder($folder);
-    $client->uploadFile($diskPath, $localPath, true);
+    // Та же выгрузка, что и автоматическая сразу после экспорта (результат запоминается для страницы прогресса).
+    JobUploader::upload($job);
 
     $redirectBack('ok');
 } catch (Exception $e) {

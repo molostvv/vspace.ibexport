@@ -42,6 +42,7 @@ $vibxCheckboxes = [
     'DEFAULT_WITH_FILES' => 'Y',
     'DEFAULT_ACTIVE_ONLY' => 'N',
     'DEFAULT_UPDATE_BY_CODE' => 'Y',
+    'YANDEX_DISK_AUTO_UPLOAD' => 'Y',
 ];
 
 $tabControl = new CAdminTabControl('tabControl', [

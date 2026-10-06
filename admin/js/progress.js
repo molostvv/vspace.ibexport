@@ -45,6 +45,12 @@
         xhr.send('AJAX=Y&JOB_ID=' + encodeURIComponent(cfg.jobId) + '&sessid=' + encodeURIComponent(cfg.sessid));
     }
 
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+
     function render(data, cfg) {
         var statusEl = document.getElementById('vibx-status');
         var barInnerEl = document.getElementById('vibx-bar-inner');
@@ -91,10 +97,26 @@
                         .replace('#UPDATED#', data.updated_count)
                         .replace('#SKIPPED#', data.skipped_count);
                 }
+                // Выгрузка архива на Яндекс.Диск сразу после экспорта (data.disk_upload, страница прогресса экспорта):
+                // выгружен / выгружается — в том же сообщении, ошибка — отдельным красным блоком (см. progress.php).
+                var disk = data.disk_upload;
+                var diskErrorHtml = '';
+                if (disk && cfg.messages.diskDone) {
+                    if (disk.status === 'DONE') {
+                        doneText += ' ' + cfg.messages.diskDone.replace('#PATH#', escapeHtml(disk.disk_path));
+                    } else if (disk.status === 'RUNNING') {
+                        doneText += ' ' + cfg.messages.diskRunning;
+                    } else if (disk.status === 'ERROR') {
+                        diskErrorHtml = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
+                            + '<div class="adm-info-message-title">' + cfg.messages.diskError.replace('#MESSAGE#', escapeHtml(disk.message)) + '</div>'
+                            + '<div class="adm-info-message-icon"></div>'
+                            + '</div></div>';
+                    }
+                }
                 resultEl.innerHTML = '<div class="adm-info-message-wrap adm-info-message-green"><div class="adm-info-message">'
                     + '<div class="adm-info-message-title">' + doneText + '</div>'
                     + '<div class="adm-info-message-icon"></div>'
-                    + '</div></div>';
+                    + '</div></div>' + diskErrorHtml;
             }
             if (downloadEl && data.download_url) {
                 var downloadHtml = '<a class="adm-btn adm-btn-save" href="' + data.download_url + '">' + cfg.messages.download + '</a>';

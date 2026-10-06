@@ -18,3 +18,6 @@ $MESS['IBEXPORT_ERR_SESSID'] = 'Истекла сессия. Обновите с
 $MESS['IBYADISK_BTN_UPLOAD'] = 'Выгрузить в Яндекс.Диск';
 $MESS['IBYADISK_UPLOAD_OK'] = 'Архив выгружен в Яндекс.Диск.';
 $MESS['IBYADISK_UPLOAD_ERROR'] = 'Не удалось выгрузить архив в Яндекс.Диск: #MESSAGE#';
+$MESS['IBYADISK_UPLOAD_RETRY'] = 'Архив на сайте цел — повторите кнопкой «Выгрузить в Яндекс.Диск».';
+$MESS['IBYADISK_AUTO_DONE'] = 'Архив выгружен на Яндекс.Диск: #PATH#.';
+$MESS['IBYADISK_AUTO_RUNNING'] = 'Архив выгружается на Яндекс.Диск…';

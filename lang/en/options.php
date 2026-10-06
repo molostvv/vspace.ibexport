@@ -11,5 +11,6 @@ $MESS['IBEXPORT_OPT_TTL_HOURS'] = 'Temp files / archive retention, hours';
 $MESS['IBEXPORT_OPT_DEFAULT_WITH_FILES'] = 'Export files by default';
 $MESS['IBEXPORT_OPT_DEFAULT_ACTIVE_ONLY'] = 'Active only by default';
 $MESS['IBEXPORT_OPT_DEFAULT_UPDATE_BY_CODE'] = 'Update existing by code by default (import)';
+$MESS['IBEXPORT_OPT_YANDEX_DISK_AUTO_UPLOAD'] = 'Upload the export archive to Yandex.Disk right away (if Disk is connected)';
 $MESS['IBEXPORT_OPT_RANGE_HINT'] = '(#MIN#–#MAX#)';
 $MESS['IBEXPORT_OPT_ERR_RANGE'] = '"#NAME#": an integer from #MIN# to #MAX# is required. Settings were not saved.';

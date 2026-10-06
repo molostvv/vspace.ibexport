@@ -48,6 +48,15 @@ class Options
         return Option::get(self::MODULE_ID, 'DEFAULT_UPDATE_BY_CODE', 'Y') === 'Y';
     }
 
+    /**
+     * Сразу после экспорта выгружать архив на Яндекс.Диск (если Диск подключён) — без кнопки "Выгрузить в
+     * Яндекс.Диск" на странице прогресса (YandexDisk\JobUploader).
+     */
+    public static function isYandexDiskAutoUpload(): bool
+    {
+        return Option::get(self::MODULE_ID, 'YANDEX_DISK_AUTO_UPLOAD', 'Y') === 'Y';
+    }
+
     public static function isYandexDiskEnabled(): bool
     {
         return Option::get(self::MODULE_ID, 'YANDEX_DISK_ENABLED', 'N') === 'Y';

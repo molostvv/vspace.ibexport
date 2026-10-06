@@ -18,3 +18,6 @@ $MESS['IBEXPORT_ERR_SESSID'] = 'Session expired. Reload the page and try again.'
 $MESS['IBYADISK_BTN_UPLOAD'] = 'Upload to Yandex.Disk';
 $MESS['IBYADISK_UPLOAD_OK'] = 'Archive uploaded to Yandex.Disk.';
 $MESS['IBYADISK_UPLOAD_ERROR'] = 'Failed to upload the archive to Yandex.Disk: #MESSAGE#';
+$MESS['IBYADISK_UPLOAD_RETRY'] = 'The archive on the site is intact — retry with "Upload to Yandex.Disk".';
+$MESS['IBYADISK_AUTO_DONE'] = 'The archive was uploaded to Yandex.Disk: #PATH#.';
+$MESS['IBYADISK_AUTO_RUNNING'] = 'The archive is being uploaded to Yandex.Disk…';

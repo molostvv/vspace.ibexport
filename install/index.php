@@ -64,7 +64,7 @@ class vspace_ibexport extends CModule
     {
         Loader::includeModule($this->MODULE_ID);
 
-        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class, \Vspace\Ibexport\ImportedFileTable::class] as $tableClass) {
+        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class, \Vspace\Ibexport\ImportedFileTable::class, \Vspace\Ibexport\YandexDisk\JobUploadTable::class] as $tableClass) {
             $entity = $tableClass::getEntity();
             if (!$entity->getConnection()->isTableExists($entity->getDbTableName())) {
                 $entity->createDbTable();
@@ -89,7 +89,7 @@ class vspace_ibexport extends CModule
         Loader::includeModule($this->MODULE_ID);
 
         $connection = Application::getConnection();
-        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class, \Vspace\Ibexport\ImportedFileTable::class] as $tableClass) {
+        foreach ([\Vspace\Ibexport\JobTable::class, \Vspace\Ibexport\ImportJobTable::class, \Vspace\Ibexport\ImportedFileTable::class, \Vspace\Ibexport\YandexDisk\JobUploadTable::class] as $tableClass) {
             $entity = $tableClass::getEntity();
             if ($entity->getConnection()->isTableExists($entity->getDbTableName())) {
                 $connection->dropTable($entity->getDbTableName());

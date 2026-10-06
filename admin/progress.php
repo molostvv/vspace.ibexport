@@ -7,6 +7,7 @@ use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\JobTable;
 use Vspace\Ibexport\Options;
+use Vspace\Ibexport\YandexDisk\JobUploadTable;
 use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
@@ -77,7 +78,19 @@ $downloadUrl = '/bitrix/admin/vspace_ibexport_download.php?lang=' . LANGUAGE_ID
 // и та без кнопок вываливается под форму. progress.js заменяет содержимое и показывает его по завершении.
 $downloadButtonHtml = '<a class="adm-btn adm-btn-save" href="' . htmlspecialcharsbx($downloadUrl) . '">' . htmlspecialcharsbx(GetMessage('IBEXPORT_BTN_DOWNLOAD')) . '</a>';
 if ($job['STATUS'] === JobTable::STATUS_DONE) {
-    $messageHtml = AdminMessages::ok(GetMessage('IBEXPORT_PROGRESS_DONE'));
+    // Выгрузка архива на Яндекс.Диск (сразу после экспорта или кнопкой ниже) — в том же сообщении; ошибка — отдельным
+    // красным блоком. Та же разметка, что дорисовывает progress.js по завершении через AJAX-опрос.
+    $diskUpload = JobUploadTable::getByJob($jobId);
+    $doneText = GetMessage('IBEXPORT_PROGRESS_DONE');
+    if ($diskUpload && $diskUpload['status'] === JobUploadTable::STATUS_DONE) {
+        $doneText .= ' ' . GetMessage('IBYADISK_AUTO_DONE', ['#PATH#' => $diskUpload['disk_path']]);
+    } elseif ($diskUpload && $diskUpload['status'] === JobUploadTable::STATUS_RUNNING) {
+        $doneText .= ' ' . GetMessage('IBYADISK_AUTO_RUNNING');
+    }
+    $messageHtml = AdminMessages::ok($doneText);
+    if ($diskUpload && $diskUpload['status'] === JobUploadTable::STATUS_ERROR) {
+        $messageHtml .= AdminMessages::error(GetMessage('IBYADISK_UPLOAD_ERROR', ['#MESSAGE#' => $diskUpload['message']]) . ' ' . GetMessage('IBYADISK_UPLOAD_RETRY'));
+    }
 
     // Выгрузка в Яндекс.Диск — отдельная, полностью ручная кнопка рядом со
     // "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск", раздел 3): недоступность
@@ -114,6 +127,9 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
             error: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_ERROR')) ?>,
             download: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_BTN_DOWNLOAD')) ?>,
             yandexUpload: <?= \CUtil::PhpToJSObject(GetMessage('IBYADISK_BTN_UPLOAD')) ?>,
+            diskDone: <?= \CUtil::PhpToJSObject(GetMessage('IBYADISK_AUTO_DONE')) ?>,
+            diskRunning: <?= \CUtil::PhpToJSObject(GetMessage('IBYADISK_AUTO_RUNNING')) ?>,
+            diskError: <?= \CUtil::PhpToJSObject(GetMessage('IBYADISK_UPLOAD_ERROR') . ' ' . GetMessage('IBYADISK_UPLOAD_RETRY')) ?>,
             statusLabels: <?= \CUtil::PhpToJSObject($statusLabels) ?>
         }
     };
@@ -173,8 +189,8 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
 // Результат отдельного действия "Выгрузить в Яндекс.Диск"
 // (yandex_disk_upload.php перенаправляет сюда с этим флагом) — свой,
 // независимый от основного messageHtml блок, чтобы не путать со статусом
-// самого экспорта.
-$diskUploadStatus = (string)($_REQUEST['DISK_UPLOAD'] ?? '');
+// самого экспорта. Если состояние выгрузки запоминается (JobUploadTable), оно уже показано в итоге выше.
+$diskUploadStatus = JobUploadTable::isAvailable() ? '' : (string)($_REQUEST['DISK_UPLOAD'] ?? '');
 if ($diskUploadStatus === 'ok'): ?>
     <?= AdminMessages::ok(GetMessage('IBYADISK_UPLOAD_OK')) ?>
 <?php elseif ($diskUploadStatus === 'error'): ?>

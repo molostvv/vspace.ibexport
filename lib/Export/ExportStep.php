@@ -7,6 +7,7 @@ use Vspace\Ibexport\JobEventLog;
 use Vspace\Ibexport\JobTable;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\XmlStreamWriter;
+use Vspace\Ibexport\YandexDisk\JobUploader;
 
 /**
  * Специфичная для экспорта часть одного тика (колбэк TickRunner): по строке
@@ -155,6 +156,17 @@ final class ExportStep
         ]);
 
         $this->eventLog->done($jobId);
+
+        // Сразу на Яндекс.Диск (настройка модуля, по умолчанию включена, если Диск подключён). Задание уже завершено и
+        // архив готов: сбой выгрузки экспорт не роняет — результат (JobUploadTable) виден на странице прогресса, там же
+        // кнопка "Выгрузить в Яндекс.Диск" для повтора.
+        if (JobUploader::isAutoEnabled()) {
+            try {
+                JobUploader::upload(['ARCHIVE_FILE' => $archive['name']] + $job);
+            } catch (\Throwable $e) {
+                // причина уже записана JobUploader в JobUploadTable
+            }
+        }
     }
 
     // ---------------------------------------------------------------

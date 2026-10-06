@@ -11,6 +11,7 @@ use Bitrix\Main\Type\DateTime;
 use Vspace\Ibexport\Export\BitrixTreeSource;
 use Vspace\Ibexport\Export\ExportStep;
 use Vspace\Ibexport\Export\TreeSourceInterface;
+use Vspace\Ibexport\YandexDisk\JobUploadTable;
 
 Loader::includeModule('iblock');
 Loc::loadMessages(__FILE__);
@@ -162,6 +163,7 @@ class Exporter
             static fn(array $job): array => [
                 'archive_file' => $job['ARCHIVE_FILE'],
                 'archive_size' => (int)$job['ARCHIVE_SIZE'],
+                'disk_upload' => JobUploadTable::getByJob((int)$job['ID']), // выгрузка на Яндекс.Диск, null — не было
             ]
         );
     }
@@ -191,6 +193,7 @@ class Exporter
         ]);
         while ($row = $rows->fetch()) {
             TmpStorage::delete((string)$row['TMP_DIR']);
+            JobUploadTable::deleteByJob((int)$row['ID']);
             JobTable::delete($row['ID']);
         }
 
