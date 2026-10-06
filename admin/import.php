@@ -54,7 +54,7 @@ $tabControl = new CAdminTabControl('tabControl', [
 ]);
 ?>
 
-<form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_import_form" enctype="multipart/form-data">
+<form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_import_form" id="vibx_import_form" enctype="multipart/form-data">
     <?php $tabControl->Begin(); ?>
     <?= bitrix_sessid_post() ?>
     <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
@@ -296,22 +296,14 @@ $tabControl = new CAdminTabControl('tabControl', [
                         </td>
                         <td class="adm-list-table-cell">
                             <div class="adm-list-table-cell-inner">
-                                <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">
-                                    <?= bitrix_sessid_post() ?>
-                                    <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
-                                    <input type="hidden" name="IBLOCK_ID" value="<?= (int)$iblockId ?>">
-                                    <?php // Настройки формы выше переносим в следующий шаг: контроллер при наличии STEP читает чекбокс как "снят", если ключа нет ?>
-                                    <input type="hidden" name="PARENT_SECTION_REF" value="<?= htmlspecialcharsbx($parentSectionRef) ?>">
-                                    <?php if ($updateByCode): ?>
-                                        <input type="hidden" name="UPDATE_BY_CODE" value="Y">
-                                    <?php endif; ?>
-                                    <?php if ($matchByXmlId): ?>
-                                        <input type="hidden" name="MATCH_BY_XML_ID" value="Y">
-                                    <?php endif; ?>
-                                    <input type="hidden" name="STEP" value="disk_import">
-                                    <input type="hidden" name="DISK_PATH" value="<?= htmlspecialcharsbx($file['path']) ?>">
-                                    <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">
-                                </form>
+                                <?php
+                                // Кнопка отправляет основную форму (атрибут form): инфоблок, родительский раздел и галки
+                                // берутся такими, какие они в форме сейчас, а не на момент показа списка. Шаг и файл —
+                                // в formaction (основная форма — POST, Request объединяет GET и POST).
+                                ?>
+                                <input type="submit" form="vibx_import_form" class="adm-btn"
+                                       formaction="<?= htmlspecialcharsbx($APPLICATION->GetCurPage() . '?' . http_build_query(['lang' => LANGUAGE_ID, 'STEP' => 'disk_import', 'DISK_PATH' => $file['path']])) ?>"
+                                       value="<?= GetMessage('IBYADISK_BTN_IMPORT_FILE') ?>">
                             </div>
                         </td>
                     </tr>

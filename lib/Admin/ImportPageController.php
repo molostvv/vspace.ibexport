@@ -11,6 +11,7 @@ use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
 use Vspace\Ibexport\YandexDisk\Exception as YandexDiskException;
 use Vspace\Ibexport\YandexDisk\ImportSource;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 /**
  * Обработка запроса страницы "Импорт" (admin/import.php). Шаги (параметр STEP):
@@ -43,7 +44,8 @@ final class ImportPageController
      * }
      *  prepared — результат Importer::prepareUpload()/ImportSource::prepareFromDisk(), null — архив ещё не принят;
      *  preview — результат Importer::preview() для принятого архива (что будет создано/обновлено), null — архив не принят;
-     *  diskFiles — результат "Проверить Диск", null — шаг не выполнялся;
+     *  diskFiles — файлы на Диске ("Проверить Диск" либо сразу, если Диск подключён), null — Диск не подключён,
+     *  недоступен или архив уже принят;
      *  diskImported — какие из этих файлов уже импортированы на этой инсталляции: MD5 => последний импорт
      *  (ImportedFileTable::findLatestByMd5()).
      */
@@ -93,12 +95,7 @@ final class ImportPageController
                     // Отдельный, полностью ручной шаг (ТЗ "Экспорт в Яндекс.Диск",
                     // раздел 3) — недоступность Диска здесь не мешает обычной
                     // ручной загрузке архива веткой STEP=validate выше.
-                    try {
-                        $diskFiles = ImportSource::listDiskFiles();
-                        $diskImported = ImportedFileTable::findLatestByMd5(array_column($diskFiles, 'md5'));
-                    } catch (YandexDiskException $e) {
-                        $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
-                    }
+                    $diskFiles = $this->listDisk($errors, $diskImported);
                 } elseif ($step === 'disk_import') {
                     $diskPath = (string)($request->get('DISK_PATH') ?? '');
                     if ($diskPath === '') {
@@ -140,6 +137,13 @@ final class ImportPageController
             }
         }
 
+        // Диск подключён — список его файлов и без нажатия "Проверить Диск", пока архив ещё не принят: при открытии
+        // страницы, по кнопке "Импортировать ещё" и после неудачного шага. Только чтение, поэтому без sessid; при
+        // недоступности Диска форма работает как обычно, ошибка — над ней.
+        if ($prepared === null && $diskFiles === null && $iblocks && Options::isYandexDiskEnabled() && Settings::hasToken()) {
+            $diskFiles = $this->listDisk($errors, $diskImported);
+        }
+
         return [
             'errors' => $errors,
             'prepared' => $prepared,
@@ -152,5 +156,23 @@ final class ImportPageController
             'updateByCode' => $updateByCode,
             'matchByXmlId' => $matchByXmlId,
         ];
+    }
+
+    /**
+     * Файлы папки обмена на Диске и какие из них уже импортированы здесь; ошибка Диска — в $errors, результат null.
+     *
+     * @param array<string, array> $diskImported MD5 => последний импорт (ImportedFileTable::findLatestByMd5())
+     */
+    private function listDisk(array &$errors, array &$diskImported): ?array
+    {
+        try {
+            $files = ImportSource::listDiskFiles();
+        } catch (YandexDiskException $e) {
+            $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
+            return null;
+        }
+        $diskImported = ImportedFileTable::findLatestByMd5(array_column($files, 'md5'));
+
+        return $files;
     }
 }
