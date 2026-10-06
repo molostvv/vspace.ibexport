@@ -43,6 +43,24 @@
     vertical-align: middle;
 }
 
+/* Кнопки действий под формой подключения Яндекс.Диска ("Очистить папку", "Отключить") — в один ряд. */
+.vibx-actions {
+    margin-top: 10px;
+}
+
+.vibx-actions form {
+    display: inline-block;
+    margin-right: 8px;
+}
+
+/* "Папка на Диске пуста" — на месте кнопки очистки, на одной линии с "Отключить". */
+.vibx-actions-note {
+    display: inline-block;
+    margin-right: 12px;
+    color: #6b7a63;
+    font-size: 13px;
+}
+
 /* Подсказка под заголовком списка файлов на Диске (нумерация, подсветка импортированных). */
 .vibx-list-hint {
     margin-bottom: 6px;

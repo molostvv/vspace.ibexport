@@ -12,3 +12,4 @@ $MESS['IBX_YADISK_CLIENT_UPLOAD_HREF_FAILED'] = 'Не удалось обрат�
 $MESS['IBX_YADISK_CLIENT_NO_DOWNLOAD_HREF'] = 'Яндекс.Диск не вернул ссылку для скачивания.';
 $MESS['IBX_YADISK_CLIENT_DOWNLOAD_HREF_FAILED'] = 'Не удалось скачать файл по ссылке от Яндекс.Диска (#HREF#), попыток: #ATTEMPTS#.';
 $MESS['IBX_YADISK_CLIENT_DOWNLOAD_HTTP_ERROR'] = 'Ошибка при скачивании файла с Яндекс.Диска (HTTP #STATUS#).';
+$MESS['IBX_YADISK_CLIENT_ROOT_FOLDER'] = 'Папка обмена указывает на корень Яндекс.Диска — очищать её нельзя. Укажите отдельную папку в настройках подключения.';

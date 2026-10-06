@@ -35,6 +35,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
         if ($action === 'disconnect') {
             Settings::clearToken();
             $notice = GetMessage('IBYADISK_DISCONNECTED');
+        } elseif ($action === 'clear_folder') {
+            // Файлы удаляются по одному (запрос к API на каждый) — на большой папке это дольше обычного запроса страницы.
+            @set_time_limit(300);
+            $folder = Settings::getFolder();
+            $result = (new Client(Settings::getToken()))->clearFolder($folder);
+            $notice = GetMessage('IBYADISK_CLEARED', ['#FOLDER#' => $folder, '#COUNT#' => $result['deleted']]);
+            foreach ($result['failed'] as $name => $message) {
+                $errors[] = GetMessage('IBYADISK_CLEAR_FAILED_FILE', ['#NAME#' => $name, '#MESSAGE#' => $message]);
+            }
         } else { // ACTION=save
             $folder = trim((string)($_REQUEST['FOLDER'] ?? ''));
             Settings::setFolder($folder !== '' ? $folder : '/vspace.ibexport');
@@ -54,9 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
-if ($errors) {
-    AdminMessages::showErrors($errors);
-} elseif ($notice !== '') {
+// Очистка папки может закончиться частично: сколько удалено — и какие файлы удалить не удалось.
+AdminMessages::showErrors($errors);
+if ($notice !== '') {
     AdminMessages::showNotice($notice);
 }
 
@@ -64,6 +73,7 @@ if ($errors) {
 // (ТЗ, раздел 6: все операции синхронные, по явному действию администратора,
 // открытие страницы настроек — такое же явное действие).
 $statusHtml = '';
+$folderFileCount = null; // null — неизвестно (Диск не подключён или недоступен)
 if (Settings::hasToken()) {
     try {
         $client = new Client(Settings::getToken());
@@ -75,6 +85,8 @@ if (Settings::hasToken()) {
             '#FREE#' => $freeGb,
             '#TOTAL#' => $totalGb,
         ]));
+        // Сколько файлов в папке обмена — для кнопки очистки (listFiles() отдаёт до 200 файлов).
+        $folderFileCount = count($client->listFiles(Settings::getFolder()));
     } catch (Exception $e) {
         $statusHtml = AdminMessages::error(GetMessage('IBYADISK_STATUS_ERROR', ['#MESSAGE#' => $e->getMessage()]));
     }
@@ -119,13 +131,34 @@ $tabControl = new CAdminTabControl('tabControl', [
 </form>
 
 <?php if (Settings::hasToken()): ?>
-    <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_yandex_disk_disconnect" style="margin-top: 10px;">
-        <?= bitrix_sessid_post() ?>
-        <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
-        <input type="hidden" name="ACTION" value="disconnect">
-        <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_DISCONNECT') ?>"
-               onclick="return confirm('<?= \CUtil::JSEscape(GetMessage('IBYADISK_DISCONNECT_CONFIRM')) ?>');">
-    </form>
+    <div class="vibx-actions">
+        <?php $folder = Settings::getFolder(); ?>
+        <?php if ($folderFileCount === 0): ?>
+            <?php // Пустую папку очищать нечего — вместо кнопки говорим об этом прямо, чтобы её отсутствие не озадачивало ?>
+            <span class="vibx-actions-note"><?= htmlspecialcharsbx(GetMessage('IBYADISK_FOLDER_EMPTY', ['#FOLDER#' => $folder])) ?></span>
+        <?php else: ?>
+            <?php
+            // Очистка папки обмена: файлы — в Корзину Диска (Client::clearFolder()). Папка общая для всех сайтов,
+            // подключённых к этому Диску, поэтому — с подтверждением.
+            $clearTitle = GetMessage('IBYADISK_BTN_CLEAR', ['#FOLDER#' => $folder])
+                . ($folderFileCount !== null ? ' ' . GetMessage('IBYADISK_BTN_CLEAR_COUNT', ['#COUNT#' => $folderFileCount >= 200 ? '200+' : $folderFileCount]) : '');
+            ?>
+            <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_yandex_disk_clear">
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
+                <input type="hidden" name="ACTION" value="clear_folder">
+                <input type="submit" class="adm-btn" value="<?= htmlspecialcharsbx($clearTitle) ?>"
+                       onclick="return confirm('<?= \CUtil::JSEscape(GetMessage('IBYADISK_CLEAR_CONFIRM', ['#FOLDER#' => $folder])) ?>');">
+            </form>
+        <?php endif; ?>
+        <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_yandex_disk_disconnect">
+            <?= bitrix_sessid_post() ?>
+            <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
+            <input type="hidden" name="ACTION" value="disconnect">
+            <input type="submit" class="adm-btn" value="<?= GetMessage('IBYADISK_BTN_DISCONNECT') ?>"
+                   onclick="return confirm('<?= \CUtil::JSEscape(GetMessage('IBYADISK_DISCONNECT_CONFIRM')) ?>');">
+        </form>
+    </div>
 <?php endif; ?>
 
 <?php

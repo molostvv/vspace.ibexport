@@ -12,3 +12,4 @@ $MESS['IBX_YADISK_CLIENT_UPLOAD_HREF_FAILED'] = 'Could not reach the upload link
 $MESS['IBX_YADISK_CLIENT_NO_DOWNLOAD_HREF'] = 'Yandex.Disk did not return a download link.';
 $MESS['IBX_YADISK_CLIENT_DOWNLOAD_HREF_FAILED'] = 'Could not download the file via the Yandex.Disk link (#HREF#), attempts: #ATTEMPTS#.';
 $MESS['IBX_YADISK_CLIENT_DOWNLOAD_HTTP_ERROR'] = 'Error downloading the file from Yandex.Disk (HTTP #STATUS#).';
+$MESS['IBX_YADISK_CLIENT_ROOT_FOLDER'] = 'The exchange folder points to the Yandex.Disk root — it cannot be cleared. Set a separate folder in the connection settings.';

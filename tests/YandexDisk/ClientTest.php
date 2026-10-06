@@ -268,6 +268,90 @@ final class ClientTest extends TestCase
         $client->uploadFile('/vspace.ibexport/x.zip', $localFile);
     }
 
+    public function testDeleteFileMovesToTrash(): void
+    {
+        $this->transport->queueResponse(204, '');
+
+        (new Client('token', $this->transport))->deleteFile('disk:/vspace.ibexport/job17.zip');
+
+        self::assertSame('DELETE', $this->transport->calls[0]['method']);
+        self::assertSame('disk:/vspace.ibexport/job17.zip', $this->queryParam($this->transport->calls[0]['url'], 'path'));
+        self::assertSame('false', $this->queryParam($this->transport->calls[0]['url'], 'permanently'));
+    }
+
+    public function testDeleteFileAcceptsAsyncAndAlreadyDeleted(): void
+    {
+        $this->transport->queueResponse(202, '{"href":"https://cloud-api.yandex.net/v1/disk/operations/1"}');
+        $this->transport->queueResponse(404, json_encode(['message' => 'Resource not found']));
+
+        $client = new Client('token', $this->transport);
+        $client->deleteFile('disk:/vspace.ibexport/a.zip');
+        $client->deleteFile('disk:/vspace.ibexport/b.zip');
+
+        self::assertCount(2, $this->transport->calls);
+    }
+
+    public function testDeleteFileRetriesAfterNetworkFailure(): void
+    {
+        $pauses = [];
+        $this->transport->queueResponse(0, 'stream timeout'); // запрос выполнен, но ответ не дошёл
+        $this->transport->queueResponse(404, json_encode(['message' => 'Resource not found']));
+
+        $client = new Client('token', $this->transport, 15, static function (int $seconds) use (&$pauses): void {
+            $pauses[] = $seconds;
+        });
+        $client->deleteFile('disk:/vspace.ibexport/a.zip');
+
+        self::assertCount(2, $this->transport->calls);
+        self::assertSame([1], $pauses);
+    }
+
+    public function testClearFolderDeletesEveryFileAndReportsFailures(): void
+    {
+        $listing = json_encode(['_embedded' => ['items' => [
+            ['type' => 'file', 'name' => 'a.zip', 'path' => 'disk:/vspace.ibexport/a.zip'],
+            ['type' => 'dir', 'name' => 'keep', 'path' => 'disk:/vspace.ibexport/keep'],
+            ['type' => 'file', 'name' => 'b.zip', 'path' => 'disk:/vspace.ibexport/b.zip'],
+        ]]]);
+        $this->transport->queueResponse(200, $listing);
+        $this->transport->queueResponse(204, '');
+        $this->transport->queueResponse(423, json_encode(['message' => 'Resource is locked']));
+        // повторный список: остался только b.zip, который уже пробовали удалить, — очистка на этом заканчивается
+        $this->transport->queueResponse(200, json_encode(['_embedded' => ['items' => [
+            ['type' => 'file', 'name' => 'b.zip', 'path' => 'disk:/vspace.ibexport/b.zip'],
+        ]]]));
+
+        $result = (new Client('token', $this->transport))->clearFolder('/vspace.ibexport');
+
+        self::assertSame(1, $result['deleted']);
+        self::assertSame(['b.zip' => 'Resource is locked'], $result['failed']);
+        $methods = array_column($this->transport->calls, 'method');
+        self::assertSame(['GET', 'DELETE', 'DELETE', 'GET'], $methods); // папка "keep" не удаляется
+    }
+
+    public function testClearFolderOfMissingFolderDoesNothing(): void
+    {
+        $this->transport->queueResponse(404, json_encode(['message' => 'Resource not found']));
+
+        $result = (new Client('token', $this->transport))->clearFolder('/vspace.ibexport');
+
+        self::assertSame(['deleted' => 0, 'failed' => []], $result);
+    }
+
+    public function testClearFolderRefusesDiskRoot(): void
+    {
+        foreach (['', '/', 'disk:/', 'disk:', ' / '] as $root) {
+            try {
+                (new Client('token', $this->transport))->clearFolder($root);
+                self::fail('Root "' . $root . '" must be refused.');
+            } catch (Exception $e) {
+                self::assertCount(0, $this->transport->calls);
+            }
+        }
+        self::assertFalse(Client::isRootPath('/vspace.ibexport'));
+        self::assertFalse(Client::isRootPath('disk:/vspace.ibexport/'));
+    }
+
     public function testListFilesFiltersOnlyFilesAndParsesFields(): void
     {
         $this->transport->queueResponse(200, json_encode([

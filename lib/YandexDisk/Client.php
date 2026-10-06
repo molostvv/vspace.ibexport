@@ -209,6 +209,66 @@ class Client
     }
 
     /**
+     * DELETE /v1/disk/resources — файл в Корзину Диска (permanently=false: его можно восстановить оттуда).
+     * 204 — удалён, 202 — Диск удаляет его асинхронно, 404 — файла уже нет: всё это не ошибка.
+     *
+     * Если ответ не дошёл (сетевой сбой — так бывает, что запрос выполнен, а ответ ждали до таймаута), запрос
+     * повторяется до TRANSFER_ATTEMPTS раз: DELETE идемпотентен, уже удалённый файл даст 404.
+     */
+    public function deleteFile(string $diskPath): void
+    {
+        $url = $this->buildUrl('/resources', ['path' => $diskPath, 'permanently' => 'false']);
+        for ($attempt = 1; ; $attempt++) {
+            $res = $this->transport->request('DELETE', $url, $this->authHeaders());
+            if ($res['status'] !== 0 || $attempt >= self::TRANSFER_ATTEMPTS) {
+                break;
+            }
+            ($this->pause)($attempt);
+        }
+        $this->throwOnTransportFailure($res);
+        if (!in_array($res['status'], [202, 204, 404], true)) {
+            $this->throwApiError($res['status'], $res['body']);
+        }
+    }
+
+    /**
+     * Очистка папки обмена: все файлы папки — в Корзину Диска; сама папка и вложенные папки остаются. Корень Диска
+     * очищать нельзя (пустая или ошибочная настройка папки вычистила бы весь Диск). Список берётся порциями
+     * (listFiles() отдаёт до 200 файлов), пока в папке есть файлы, которые ещё не пробовали удалить.
+     *
+     * @return array{deleted: int, failed: array<string, string>} число удалённых и имя файла => причина ошибки
+     */
+    public function clearFolder(string $folderPath): array
+    {
+        if (self::isRootPath($folderPath)) {
+            throw new Exception(Loc::getMessage('IBX_YADISK_CLIENT_ROOT_FOLDER'));
+        }
+
+        $deleted = 0;
+        $failed = [];
+        $attempted = [];
+        while ($files = array_filter($this->listFiles($folderPath), static fn(array $f): bool => !isset($attempted[$f['path']]))) {
+            foreach ($files as $file) {
+                $attempted[$file['path']] = true;
+                try {
+                    $this->deleteFile($file['path']);
+                    $deleted++;
+                } catch (Exception $e) {
+                    $failed[$file['name']] = $e->getMessage();
+                }
+            }
+        }
+
+        return ['deleted' => $deleted, 'failed' => $failed];
+    }
+
+    /** Путь указывает на корень Диска: "", "/", "disk:", "disk:/". */
+    public static function isRootPath(string $path): bool
+    {
+        return trim((string)preg_replace('~^disk:~i', '', trim($path)), '/') === '';
+    }
+
+    /**
      * GET /v1/disk/resources — список файлов в папке обмена (для отображения на проде), новые первыми.
      * md5 — MD5 содержимого (по нему список отмечает уже импортированные архивы, см. ImportedFileTable).
      * @return array<int, array{name:string,path:string,size:int,modified:string,md5:string}>
