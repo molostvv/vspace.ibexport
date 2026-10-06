@@ -9,6 +9,7 @@ $MESS['IBEXPORT_PROGRESS_RUNNING'] = 'Выполняется...';
 $MESS['IBEXPORT_PROGRESS_DONE'] = 'Экспорт завершён.';
 $MESS['IBEXPORT_PROGRESS_ERROR'] = 'Ошибка экспорта';
 $MESS['IBEXPORT_BTN_DOWNLOAD'] = 'Скачать архив';
+$MESS['IBEXPORT_BTN_BACK'] = 'Экспортировать ещё из «#IBLOCK#»';
 $MESS['IBEXPORT_STATUS_NEW'] = 'В очереди';
 $MESS['IBEXPORT_STATUS_RUNNING'] = 'Выполняется';
 $MESS['IBEXPORT_STATUS_DONE'] = 'Завершено';

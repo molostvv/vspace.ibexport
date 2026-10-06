@@ -11,6 +11,7 @@ use Vspace\Ibexport\YandexDisk\JobUploadTable;
 use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
+Loader::includeModule('iblock');
 
 IncludeModuleLangFile(__FILE__);
 
@@ -92,11 +93,12 @@ if ($job['STATUS'] === JobTable::STATUS_DONE) {
         $messageHtml .= AdminMessages::error(GetMessage('IBYADISK_UPLOAD_ERROR', ['#MESSAGE#' => $diskUpload['message']]) . ' ' . GetMessage('IBYADISK_UPLOAD_RETRY'));
     }
 
-    // Выгрузка в Яндекс.Диск — отдельная, полностью ручная кнопка рядом со
-    // "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск", раздел 3): недоступность
-    // Диска не должна ронять/блокировать обычное скачивание, поэтому это
-    // отдельная форма с собственным action, а не часть текущей страницы.
-    if (Options::isYandexDiskEnabled() && Settings::hasToken()) {
+    // Выгрузка в Яндекс.Диск — отдельная ручная кнопка рядом со "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск",
+    // раздел 3): недоступность Диска не должна ронять/блокировать обычное скачивание, поэтому это отдельная форма
+    // с собственным action, а не часть текущей страницы. Только пока архива на Диске нет — выгрузка сразу после
+    // экспорта выключена, не удалась или ещё идёт; уже выгруженный архив выгружать повторно незачем.
+    if (Options::isYandexDiskEnabled() && Settings::hasToken()
+        && !($diskUpload && $diskUpload['status'] === JobUploadTable::STATUS_DONE)) {
         $downloadButtonHtml .= ' <form method="post" action="/bitrix/admin/vspace_ibexport_yandex_disk_upload.php" style="display:inline;">'
             . bitrix_sessid_post()
             . '<input type="hidden" name="lang" value="' . LANGUAGE_ID . '">'
@@ -107,6 +109,22 @@ if ($job['STATUS'] === JobTable::STATUS_DONE) {
 } elseif ($job['STATUS'] === JobTable::STATUS_ERROR) {
     $messageHtml = AdminMessages::error(GetMessage('IBEXPORT_PROGRESS_ERROR') . ': ' . (string)$job['ERROR_MESSAGE']);
 }
+
+// Кнопка возврата к форме экспорта — выгрузить следующие элементы/разделы того же инфоблока: тот же тип сущности
+// (и режим для раздела), со списками последних изменённых; галки — по умолчанию из настроек модуля, как при обычном
+// открытии формы. Видна по завершении задания (и с ошибкой), до того — скрыта, как и "Скачать архив".
+$iblockId = (int)$job['IBLOCK_ID'];
+$iblock = \Bitrix\Iblock\IblockTable::getList(['filter' => ['=ID' => $iblockId], 'select' => ['NAME']])->fetch();
+$backParams = ['lang' => LANGUAGE_ID, 'IBLOCK_ID' => $iblockId, 'ENTITY_TYPE' => $job['ENTITY_TYPE']];
+if ($job['ENTITY_TYPE'] === 'section') {
+    $backParams['MODE'] = $job['MODE'];
+}
+$backUrl = '/bitrix/admin/vspace_ibexport_export.php?' . http_build_query($backParams);
+$backTitle = GetMessage('IBEXPORT_BTN_BACK', ['#IBLOCK#' => '[' . $iblockId . ']' . ($iblock ? ' ' . $iblock['NAME'] : '')]);
+$jobFinished = in_array($job['STATUS'], [JobTable::STATUS_DONE, JobTable::STATUS_ERROR], true);
+// Пока задание идёт, кнопки скрыты visibility (место в панели остаётся — см. выше про булавку); у упавшего задания
+// скачивать нечего — блок скачивания убран совсем, чтобы кнопка возврата не стояла после пустого места.
+$downloadStyle = $job['STATUS'] === JobTable::STATUS_DONE ? '' : ($job['STATUS'] === JobTable::STATUS_ERROR ? ' display: none;' : ' visibility: hidden;');
 
 $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js');
 ?>
@@ -119,7 +137,8 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
         // Нужно JS, чтобы дорисовать кнопку "Выгрузить в Яндекс.Диск" и
         // при завершении экспорта через AJAX-опрос (без перезагрузки
         // страницы) — см. progress.js, иначе кнопка появится только после
-        // ручного обновления страницы уже завершённого задания.
+        // ручного обновления страницы уже завершённого задания. Архив уже
+        // на Диске (data.disk_upload.status = DONE) — кнопки нет.
         yandexDiskEnabled: <?= (Options::isYandexDiskEnabled() && Settings::hasToken()) ? 'true' : 'false' ?>,
         messages: {
             running: <?= \CUtil::PhpToJSObject(GetMessage('IBEXPORT_PROGRESS_RUNNING')) ?>,
@@ -180,7 +199,10 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
     // в отдельном блоке под панелью с пустым местом-заглушкой.
     $tabControl->Buttons();
     ?>
-    <div id="vibx-download"<?= $job['STATUS'] === JobTable::STATUS_DONE ? '' : ' style="visibility: hidden;"' ?>><?= $downloadButtonHtml ?></div>
+    <div id="vibx-download" style="display: inline-block;<?= $downloadStyle ?>"><?= $downloadButtonHtml ?></div>
+    <div id="vibx-finish-buttons" style="display: inline-block;<?= $jobFinished ? '' : ' visibility: hidden;' ?>">
+        <a class="adm-btn" href="<?= htmlspecialcharsbx($backUrl) ?>"><?= htmlspecialcharsbx($backTitle) ?></a>
+    </div>
     <?php $tabControl->End(); ?>
 </div>
 <div id="vibx-result"><?= $messageHtml ?></div>

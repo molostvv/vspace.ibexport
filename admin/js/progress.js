@@ -15,6 +15,8 @@
         }
     }
 
+    var diskWaitPolls = 0;
+
     function poll() {
         var cfg = window.vspaceIbexportProgress;
         if (!cfg) {
@@ -34,6 +36,13 @@
             }
             render(data, cfg);
 
+            // Экспорт завершён, а архив ещё выгружается на Яндекс.Диск (выгрузку ведёт другой тик, например агент) —
+            // опрашиваем дальше, пока не станет ясен итог, но не дольше ~10 минут (зависшая выгрузка).
+            if (data.status === 'DONE' && data.disk_upload && data.disk_upload.status === 'RUNNING' && diskWaitPolls < 200) {
+                diskWaitPolls++;
+                setTimeout(poll, 3000);
+                return;
+            }
             if (data.status === 'DONE' || data.status === 'ERROR') {
                 return;
             }
@@ -120,10 +129,11 @@
             }
             if (downloadEl && data.download_url) {
                 var downloadHtml = '<a class="adm-btn adm-btn-save" href="' + data.download_url + '">' + cfg.messages.download + '</a>';
-                if (cfg.yandexDiskEnabled) {
+                if (cfg.yandexDiskEnabled && !(disk && disk.status === 'DONE')) {
                     // Та же форма, что и в серверной разметке уже
                     // завершённого задания (см. progress.php) — иначе
                     // кнопка появится только после перезагрузки страницы.
+                    // Архив уже на Диске — кнопки нет.
                     downloadHtml += ' <form method="post" action="/bitrix/admin/vspace_ibexport_yandex_disk_upload.php" style="display:inline;">'
                         + '<input type="hidden" name="sessid" value="' + cfg.sessid + '">'
                         + '<input type="hidden" name="lang" value="' + cfg.lang + '">'
@@ -135,6 +145,10 @@
                 downloadEl.style.visibility = '';
             }
         } else if (data.status === 'ERROR') {
+            // Скачивать нечего — блок скачивания убираем совсем, кнопка возврата встаёт на его место.
+            if (downloadEl) {
+                downloadEl.style.display = 'none';
+            }
             if (resultEl) {
                 resultEl.innerHTML = '<div class="adm-info-message-wrap adm-info-message-red"><div class="adm-info-message">'
                     + '<div class="adm-info-message-title">' + cfg.messages.error + ': ' + (data.error_message || '') + '</div>'
