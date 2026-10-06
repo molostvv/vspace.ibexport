@@ -27,6 +27,7 @@ $page = (new ExportPageController())->handle(\Bitrix\Main\Context::getCurrent()-
     'mode' => $mode,
     'withFiles' => $withFiles,
     'activeOnly' => $activeOnly,
+    'recent' => $recent, // последние добавленные элементы и разделы выбранного инфоблока, либо null
 ] = $page;
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
@@ -41,7 +42,7 @@ $tabControl = new CAdminTabControl('tabControl', [
 ]);
 ?>
 
-<form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_export_form">
+<form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" name="vibx_export_form" id="vibx_export_form">
     <?php $tabControl->Begin(); ?>
     <?= bitrix_sessid_post() ?>
     <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
@@ -50,7 +51,8 @@ $tabControl = new CAdminTabControl('tabControl', [
     <tr>
         <td width="40%"><?= GetMessage('IBEXPORT_FIELD_IBLOCK') ?></td>
         <td>
-            <select name="IBLOCK_ID">
+            <?php // Смена инфоблока перезагружает страницу: списки последних элементов/разделов ниже — по выбранному инфоблоку ?>
+            <select name="IBLOCK_ID" onchange="window.location = '<?= \CUtil::JSEscape($APPLICATION->GetCurPage() . '?lang=' . LANGUAGE_ID . '&IBLOCK_ID=') ?>' + encodeURIComponent(this.value);">
                 <option value="0">...</option>
                 <?php foreach ($iblocksList as $ib): ?>
                     <option value="<?= (int)$ib['ID'] ?>" <?= $iblockId === (int)$ib['ID'] ? 'selected' : '' ?>>
@@ -116,6 +118,63 @@ $tabControl = new CAdminTabControl('tabControl', [
             '#ELEMENTS#' => $estimate['elements'],
         ]) ?>
     </div>
+<?php endif; ?>
+
+<?php
+// Последние добавленные элементы и разделы выбранного инфоблока — для быстрого экспорта без поиска ID. Списки —
+// штатный CAdminList (данные — массив из контроллера, без сортировки/фильтров/постраничности). Кнопки отправляют
+// основную форму (атрибут form): галки и режим — те, что в форме сейчас; сущность и действие — в formaction
+// (QUICK_ENTITY, QUICK_ACTION, см. ExportPageController). "Рассчитать объём" (только у разделов — элемент всегда
+// выгружается один) подставляет раздел в форму и считает объём, "Экспортировать" сразу запускает выгрузку.
+if ($recent === null): ?>
+    <div class="vibx-note"><?= GetMessage('IBEXPORT_RECENT_SELECT_IBLOCK') ?></div>
+<?php else:
+    $quickButton = static fn(string $type, int $id, string $action, string $title): string =>
+        '<input type="submit" form="vibx_export_form" class="adm-btn"'
+        . ' formaction="' . htmlspecialcharsbx($APPLICATION->GetCurPage() . '?' . http_build_query([
+            'lang' => LANGUAGE_ID,
+            'QUICK_ENTITY' => $type . ':' . $iblockId . ':' . $id,
+            'QUICK_ACTION' => $action,
+        ])) . '"'
+        . ' value="' . htmlspecialcharsbx($title) . '">';
+    foreach (['element' => $recent['elements'], 'section' => $recent['sections']] as $kind => $rows):
+        $list = new CAdminList('tbl_vspace_ibexport_recent_' . $kind);
+        $list->AddHeaders([
+            ['id' => 'ID', 'content' => 'ID', 'default' => true],
+            ['id' => 'NAME', 'content' => GetMessage('IBEXPORT_RECENT_COL_NAME'), 'default' => true],
+            ['id' => 'CODE', 'content' => GetMessage('IBEXPORT_RECENT_COL_CODE'), 'default' => true],
+            ['id' => 'SECTION', 'content' => GetMessage($kind === 'element' ? 'IBEXPORT_RECENT_COL_SECTION' : 'IBEXPORT_RECENT_COL_PARENT'), 'default' => true],
+            ['id' => 'ACTIVE', 'content' => GetMessage('IBEXPORT_RECENT_COL_ACTIVE'), 'default' => true],
+            ['id' => 'DATE_CREATE', 'content' => GetMessage('IBEXPORT_RECENT_COL_CREATED'), 'default' => true],
+            ['id' => 'EXPORT', 'content' => '', 'default' => true],
+        ]);
+        foreach ($rows as $r) {
+            $id = (int)$r['ID'];
+            $editUrl = $kind === 'element' ? CIBlock::GetAdminElementEditLink($iblockId, $id) : CIBlock::GetAdminSectionEditLink($iblockId, $id);
+            $row = &$list->AddRow($id, $r);
+            $row->AddViewField('ID', $id);
+            $row->AddViewField('NAME', '<a href="' . htmlspecialcharsbx($editUrl) . '" target="_blank">' . htmlspecialcharsbx($r['NAME']) . '</a>');
+            $row->AddViewField('CODE', htmlspecialcharsbx((string)$r['CODE']));
+            $row->AddViewField('SECTION', $r['SECTION_ID'] ? '[' . (int)$r['SECTION_ID'] . '] ' . htmlspecialcharsbx($r['SECTION_NAME']) : '');
+            $row->AddViewField('ACTIVE', GetMessage($r['ACTIVE'] === 'Y' ? 'IBEXPORT_RECENT_YES' : 'IBEXPORT_RECENT_NO'));
+            $row->AddViewField('DATE_CREATE', $r['DATE_CREATE'] ? htmlspecialcharsbx($r['DATE_CREATE']->toString()) : '');
+            $row->AddViewField('EXPORT', '<span class="vibx-nowrap">'
+                . ($kind === 'section' ? $quickButton($kind, $id, 'estimate', GetMessage('IBEXPORT_RECENT_BTN_ESTIMATE')) . ' ' : '')
+                . $quickButton($kind, $id, 'run', GetMessage('IBEXPORT_RECENT_BTN'))
+                . '</span>');
+            unset($row);
+        }
+        ?>
+        <div class="vibx-list-heading"><?= GetMessage($kind === 'element' ? 'IBEXPORT_RECENT_ELEMENTS' : 'IBEXPORT_RECENT_SECTIONS', ['#COUNT#' => ExportPageController::RECENT_LIMIT]) ?></div>
+        <?php if ($kind === 'element'): ?>
+            <div class="vibx-list-hint"><?= GetMessage('IBEXPORT_RECENT_HINT') ?></div>
+        <?php endif; ?>
+        <?php if (!$rows): ?>
+            <div class="vibx-note"><?= GetMessage($kind === 'element' ? 'IBEXPORT_RECENT_NO_ELEMENTS' : 'IBEXPORT_RECENT_NO_SECTIONS') ?></div>
+        <?php else: ?>
+            <?php $list->DisplayList(); ?>
+        <?php endif; ?>
+    <?php endforeach; ?>
 <?php endif; ?>
 
 <?php

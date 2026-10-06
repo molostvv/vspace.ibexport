@@ -2,6 +2,8 @@
 
 namespace Vspace\Ibexport\Admin;
 
+use Bitrix\Iblock\ElementTable;
+use Bitrix\Iblock\SectionTable;
 use Bitrix\Main\HttpRequest;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\IblockListProvider;
@@ -11,14 +13,19 @@ use Vspace\Ibexport\Rights;
 /**
  * Обработка запроса страницы "Новая выгрузка" (admin/export.php): разбор
  * параметров, валидация, проверка прав, расчёт объёма (STEP=estimate) и
- * запуск экспорта (STEP=run). HTML не формирует — возвращает данные для
- * отрисовки формы; при запуске задания делает редирект на страницу прогресса.
+ * запуск экспорта (STEP=run). Кнопки в списках последних элементов/разделов — параметры QUICK_ENTITY
+ * (что выгружать) и QUICK_ACTION (estimate — подставить в форму и рассчитать объём, иначе — сразу
+ * запустить экспорт). HTML не формирует — возвращает данные
+ * для отрисовки формы; при запуске задания делает редирект на страницу прогресса.
  *
  * Тексты ошибок берутся из языкового файла страницы (lang/ru/admin/export.php):
  * страница обязана подключить его через IncludeModuleLangFile() до handle().
  */
 final class ExportPageController
 {
+    /** Сколько последних добавленных элементов и разделов показывать под формой. */
+    public const RECENT_LIMIT = 10;
+
     /**
      * @return array{
      *     errors: string[],
@@ -29,8 +36,12 @@ final class ExportPageController
      *     entityRef: string,
      *     mode: string,
      *     withFiles: bool,
-     *     activeOnly: bool
+     *     activeOnly: bool,
+     *     recent: array{elements: array[], sections: array[]}|null
      * }
+     *  recent — последние добавленные элементы и разделы выбранного инфоблока (null — инфоблок не выбран
+     *  или недоступен): строки ID, NAME, CODE, ACTIVE, DATE_CREATE и раздел (SECTION_ID, SECTION_NAME — основной
+     *  раздел элемента либо родитель раздела).
      */
     public function handle(HttpRequest $request): array
     {
@@ -47,6 +58,16 @@ final class ExportPageController
         // в ImportPageController). Различаем по факту отправки формы (наличию STEP).
         $withFiles = $step !== '' ? (($request->get('WITH_FILES') ?? '') === 'Y') : Options::getDefaultWithFiles();
         $activeOnly = $step !== '' ? (($request->get('ACTIVE_ONLY') ?? '') === 'Y') : Options::getDefaultActiveOnly();
+
+        // Кнопки "Рассчитать объём" и "Экспортировать" в списках последних элементов/разделов: отправляют основную
+        // форму (галки и режим — текущие), а сущность и действие — в formaction (QUICK_ENTITY=тип:инфоблок:ID,
+        // QUICK_ACTION; в POST формы таких полей нет, поэтому значения из адреса не перекрываются). Дальше — обычный
+        // расчёт объёма (сущность при этом остаётся в форме для "Запустить экспорт") либо сразу запуск.
+        if (preg_match('/^(element|section):(\d+):(\d+)$/', (string)($request->get('QUICK_ENTITY') ?? ''), $quick)) {
+            [, $entityType, $quickIblockId, $entityRef] = $quick;
+            $iblockId = (int)$quickIblockId;
+            $step = ($request->get('QUICK_ACTION') ?? '') === 'estimate' ? 'estimate' : 'run';
+        }
 
         // Инфоблоки, из которых текущий пользователь может выгружать данные (раздел 10 ТЗ).
         $iblocks = IblockListProvider::getAvailable(Rights::canExport(...));
@@ -109,6 +130,39 @@ final class ExportPageController
             'mode' => $mode,
             'withFiles' => $withFiles,
             'activeOnly' => $activeOnly,
+            'recent' => $iblockId > 0 && Rights::canExport($iblockId) ? $this->recent($iblockId) : null,
         ];
+    }
+
+    /** Последние добавленные (по дате создания) элементы и разделы инфоблока — для быстрого экспорта без поиска. */
+    private function recent(int $iblockId): array
+    {
+        $elements = ElementTable::getList([
+            'filter' => ['=IBLOCK_ID' => $iblockId],
+            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'DATE_CREATE', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
+            'order' => ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
+            'limit' => self::RECENT_LIMIT,
+        ])->fetchAll();
+        $sections = SectionTable::getList([
+            'filter' => ['=IBLOCK_ID' => $iblockId],
+            'select' => ['ID', 'NAME', 'CODE', 'ACTIVE', 'DATE_CREATE', 'SECTION_ID' => 'IBLOCK_SECTION_ID'],
+            'order' => ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
+            'limit' => self::RECENT_LIMIT,
+        ])->fetchAll();
+
+        // Названия разделов (основной раздел элемента, родитель раздела) — одним запросом.
+        $sectionIds = array_values(array_unique(array_filter(array_map('intval', array_merge(
+            array_column($elements, 'SECTION_ID'),
+            array_column($sections, 'SECTION_ID')
+        )))));
+        $names = $sectionIds
+            ? array_column(SectionTable::getList(['filter' => ['@ID' => $sectionIds], 'select' => ['ID', 'NAME']])->fetchAll(), 'NAME', 'ID')
+            : [];
+        $withSectionName = static function (array $row) use ($names): array {
+            $row['SECTION_NAME'] = (string)($names[(int)$row['SECTION_ID']] ?? '');
+            return $row;
+        };
+
+        return ['elements' => array_map($withSectionName, $elements), 'sections' => array_map($withSectionName, $sections)];
     }
 }
