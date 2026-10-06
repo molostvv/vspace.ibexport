@@ -273,7 +273,7 @@ final class ClientTest extends TestCase
         $this->transport->queueResponse(200, json_encode([
             '_embedded' => ['items' => [
                 ['type' => 'dir', 'name' => 'subfolder', 'path' => 'disk:/vspace.ibexport/subfolder'],
-                ['type' => 'file', 'name' => 'job17.zip', 'path' => 'disk:/vspace.ibexport/job17.zip', 'size' => 12345, 'modified' => '2026-09-18T12:00:00+00:00'],
+                ['type' => 'file', 'name' => 'job17.zip', 'path' => 'disk:/vspace.ibexport/job17.zip', 'size' => 12345, 'modified' => '2026-09-18T12:00:00+00:00', 'md5' => '72d528ca2185608b99800fdff7a711b8'],
             ]],
         ]));
 
@@ -285,6 +285,7 @@ final class ClientTest extends TestCase
         self::assertSame('disk:/vspace.ibexport/job17.zip', $files[0]['path']);
         self::assertSame(12345, $files[0]['size']);
         self::assertSame('2026-09-18T12:00:00+00:00', $files[0]['modified']);
+        self::assertSame('72d528ca2185608b99800fdff7a711b8', $files[0]['md5']);
     }
 
     public function testListFilesReturnsEmptyOn404(): void

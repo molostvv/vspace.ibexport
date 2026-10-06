@@ -42,3 +42,39 @@
 .vibx-disk-list-table .adm-list-table-cell {
     vertical-align: middle;
 }
+
+/* Подсказка под заголовком списка файлов на Диске (нумерация, подсветка импортированных). */
+.vibx-list-hint {
+    margin-bottom: 6px;
+    color: #888;
+    font-size: 11px;
+}
+
+/* Колонка "№" — по ширине номера, а не поровну с остальными колонками таблицы шириной 100%. */
+.vibx-disk-list-table .adm-list-table-cell:first-child {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+
+/* Размер, дата — не переносить на две строки, даже когда узкое окно сжимает таблицу. */
+.vibx-nowrap {
+    white-space: nowrap;
+}
+
+/*
+ * Архив уже импортирован на этой инсталляции (ImportedFileTable). Селектор специфичнее штатных правил темы
+ * (.adm-list-table-row:nth-child(odd) / :hover .adm-list-table-cell), иначе чередование строк перекрасило бы подсветку.
+ */
+.vibx-disk-list-table .adm-list-table-row.vibx-disk-imported .adm-list-table-cell {
+    background-color: #e3f1d6;
+}
+
+.vibx-disk-list-table .adm-list-table-row.vibx-disk-imported:hover .adm-list-table-cell {
+    background-color: #d5e8c4;
+}
+
+.vibx-disk-imported-times {
+    color: #6b7a63;
+    font-size: 11px;
+}

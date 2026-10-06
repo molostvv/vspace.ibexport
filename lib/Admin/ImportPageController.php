@@ -5,6 +5,7 @@ namespace Vspace\Ibexport\Admin;
 use Bitrix\Main\HttpRequest;
 use Vspace\Ibexport\Exporter;
 use Vspace\Ibexport\IblockListProvider;
+use Vspace\Ibexport\ImportedFileTable;
 use Vspace\Ibexport\Importer;
 use Vspace\Ibexport\Options;
 use Vspace\Ibexport\Rights;
@@ -31,6 +32,7 @@ final class ImportPageController
      *     prepared: array|null,
      *     preview: array{rows: array[], truncated: bool, missing_props: array<string, int>, missing_uf: array<string, int>}|null,
      *     diskFiles: array[]|null,
+     *     diskImported: array<string, array>,
      *     iblocks: array[],
      *     iblockId: int,
      *     parentSectionRef: string,
@@ -39,7 +41,9 @@ final class ImportPageController
      * }
      *  prepared — результат Importer::prepareUpload()/ImportSource::prepareFromDisk(), null — архив ещё не принят;
      *  preview — результат Importer::preview() для принятого архива (что будет создано/обновлено), null — архив не принят;
-     *  diskFiles — результат "Проверить Диск", null — шаг не выполнялся.
+     *  diskFiles — результат "Проверить Диск", null — шаг не выполнялся;
+     *  diskImported — какие из этих файлов уже импортированы на этой инсталляции: MD5 => последний импорт
+     *  (ImportedFileTable::findLatestByMd5()).
      */
     public function handle(HttpRequest $request): array
     {
@@ -47,6 +51,7 @@ final class ImportPageController
         $prepared = null;
         $preview = null;
         $diskFiles = null;
+        $diskImported = [];
 
         $iblockId = (int)($request->get('IBLOCK_ID') ?? 0);
         $parentSectionRef = trim((string)($request->get('PARENT_SECTION_REF') ?? ''));
@@ -88,6 +93,7 @@ final class ImportPageController
                     // ручной загрузке архива веткой STEP=validate выше.
                     try {
                         $diskFiles = ImportSource::listDiskFiles();
+                        $diskImported = ImportedFileTable::findLatestByMd5(array_column($diskFiles, 'md5'));
                     } catch (YandexDiskException $e) {
                         $errors[] = GetMessage('IBYADISK_LIST_ERROR', ['#MESSAGE#' => $e->getMessage()]);
                     }
@@ -137,6 +143,7 @@ final class ImportPageController
             'prepared' => $prepared,
             'preview' => $preview,
             'diskFiles' => $diskFiles,
+            'diskImported' => $diskImported,
             'iblocks' => $iblocks,
             'iblockId' => $iblockId,
             'parentSectionRef' => $parentSectionRef,

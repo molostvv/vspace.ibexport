@@ -14,11 +14,14 @@ Loader::includeModule('iblock');
 
 IncludeModuleLangFile(__FILE__);
 
-/** Яндекс.Диск отдаёт "modified" в ISO 8601 (2026-09-18T17:48:45+00:00) — в списке файлов показываем в привычном для админки виде. */
+/**
+ * Яндекс.Диск отдаёт "modified" в ISO 8601 в UTC (2026-09-18T17:48:45+00:00) — в списке файлов показываем в привычном
+ * для админки виде и во времени сервера, как и дату импорта рядом.
+ */
 function vibxFormatDiskDate(string $iso): string
 {
     $dt = date_create($iso);
-    return $dt ? $dt->format('d.m.Y H:i:s') : $iso;
+    return $dt ? $dt->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('d.m.Y H:i:s') : $iso;
 }
 
 $APPLICATION->SetTitle(GetMessage('IBIMPORT_TITLE'));
@@ -33,6 +36,7 @@ $page = (new ImportPageController())->handle(\Bitrix\Main\Context::getCurrent()-
     'prepared' => $prepared, // результат Importer::prepareUpload()/ImportSource::prepareFromDisk() либо null
     'preview' => $preview, // результат Importer::preview() — что будет создано/обновлено, либо null
     'diskFiles' => $diskFiles, // результат "Проверить Диск" — список файлов в папке обмена на Яндекс.Диске, либо null
+    'diskImported' => $diskImported, // MD5 => последний импорт этого архива на этой инсталляции (ImportedFileTable)
     'iblocks' => $iblocksList,
     'iblockId' => $iblockId,
     'parentSectionRef' => $parentSectionRef,
@@ -250,22 +254,46 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php if (!$diskFiles): ?>
         <div class="vibx-note"><?= GetMessage('IBYADISK_LIST_EMPTY') ?></div>
     <?php else: ?>
+        <?php
+        $iblockNames = array_column($iblocksList, 'NAME', 'ID');
+        $fileCount = count($diskFiles);
+        ?>
+        <div class="vibx-list-hint"><?= GetMessage('IBYADISK_LIST_HINT') ?></div>
         <div class="adm-list-table-wrap">
             <table class="adm-list-table vibx-disk-list-table" style="width: 100%;">
                 <thead>
                 <tr class="adm-list-table-header">
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_NUM') ?></div></td>
                     <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_NAME') ?></div></td>
                     <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_SIZE') ?></div></td>
                     <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_MODIFIED') ?></div></td>
+                    <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= GetMessage('IBYADISK_COL_IMPORTED') ?></div></td>
                     <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">&nbsp;</div></td>
                 </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($diskFiles as $file): ?>
-                    <tr class="adm-list-table-row">
+                <?php foreach ($diskFiles as $index => $file): ?>
+                    <?php $imported = $diskImported[$file['md5']] ?? null; ?>
+                    <tr class="adm-list-table-row<?= $imported ? ' vibx-disk-imported' : '' ?>">
+                        <?php // Список идёт от новых к старым (Client::listFiles()), а номер растёт со временем: у самого нового файла — наибольший ?>
+                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= $fileCount - $index ?></div></td>
                         <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx($file['name']) ?></div></td>
-                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></div></td>
-                        <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx(vibxFormatDiskDate($file['modified'])) ?></div></td>
+                        <td class="adm-list-table-cell vibx-nowrap"><div class="adm-list-table-cell-inner"><?= number_format($file['size'] / 1024, 1, '.', ' ') ?> <?= GetMessage('IBYADISK_KB') ?></div></td>
+                        <td class="adm-list-table-cell vibx-nowrap"><div class="adm-list-table-cell-inner"><?= htmlspecialcharsbx(vibxFormatDiskDate($file['modified'])) ?></div></td>
+                        <td class="adm-list-table-cell">
+                            <div class="adm-list-table-cell-inner">
+                                <?php if ($imported): ?>
+                                    <?php $targetId = $imported['TARGET_IBLOCK_ID']; ?>
+                                    <span class="vibx-nowrap">&#10004; <?= $imported['DATE_IMPORT']->format('d.m.Y H:i:s') ?></span>
+                                    <br><?= htmlspecialcharsbx(GetMessage('IBYADISK_IMPORTED_INTO', [
+                                        '#IBLOCK#' => '[' . $targetId . ']' . (isset($iblockNames[$targetId]) ? ' ' . $iblockNames[$targetId] : ''),
+                                    ])) ?>
+                                    <?php if ($imported['COUNT'] > 1): ?>
+                                        <br><span class="vibx-disk-imported-times"><?= GetMessage('IBYADISK_IMPORTED_TIMES', ['#COUNT#' => $imported['COUNT']]) ?></span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
+                        </td>
                         <td class="adm-list-table-cell">
                             <div class="adm-list-table-cell-inner">
                                 <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPage()) ?>" style="display:inline;">

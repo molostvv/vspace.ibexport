@@ -12,6 +12,7 @@ use Vspace\Ibexport\Import\BitrixPropertySource;
 use Vspace\Ibexport\Import\ImportContext;
 use Vspace\Ibexport\Import\ImportPreview;
 use Vspace\Ibexport\Import\ImportStep;
+use Vspace\Ibexport\Import\SourceInfo;
 
 Loader::includeModule('iblock');
 Loc::loadMessages(__FILE__);
@@ -119,6 +120,7 @@ class Importer
             throw new \Exception(Loc::getMessage('IBX_IMPORTER_EXTRACT_FAILED', ['#PATH#' => TmpStorage::getRoot()]));
         }
         $zip->close();
+        SourceInfo::write($tmpDir, $zipPath); // MD5 архива — для истории импортов (ImportedFileTable), сам ZIP удаляется
         @unlink($zipPath);
 
         return self::describeExtracted($tmpDir, $tmpDirName, $sourceFileName) + ['ignored_entries' => $ignored];

@@ -209,8 +209,9 @@ class Client
     }
 
     /**
-     * GET /v1/disk/resources — список файлов в папке обмена (для отображения на проде).
-     * @return array<int, array{name:string,path:string,size:int,modified:string}>
+     * GET /v1/disk/resources — список файлов в папке обмена (для отображения на проде), новые первыми.
+     * md5 — MD5 содержимого (по нему список отмечает уже импортированные архивы, см. ImportedFileTable).
+     * @return array<int, array{name:string,path:string,size:int,modified:string,md5:string}>
      */
     public function listFiles(string $folderPath): array
     {
@@ -241,6 +242,7 @@ class Client
                 'path' => (string)($item['path'] ?? ''),
                 'size' => (int)($item['size'] ?? 0),
                 'modified' => (string)($item['modified'] ?? ''),
+                'md5' => (string)($item['md5'] ?? ''),
             ];
         }
         return $files;

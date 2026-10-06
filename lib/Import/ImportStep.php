@@ -4,6 +4,7 @@ namespace Vspace\Ibexport\Import;
 
 use Bitrix\Main\Type\DateTime;
 use SimpleXMLElement;
+use Vspace\Ibexport\ImportedFileTable;
 use Vspace\Ibexport\ImportJobTable;
 use Vspace\Ibexport\JobEventLog;
 
@@ -51,7 +52,7 @@ final class ImportStep
             'UPDATED_COUNT' => $report->updated,
             'SKIPPED_COUNT' => $report->skipped,
         ]);
-        $this->finalize($jobId);
+        $this->finalize($job, $tmpDir);
     }
 
     // ---------------------------------------------------------------
@@ -89,7 +90,7 @@ final class ImportStep
         ]);
 
         if ($result->isFinished()) {
-            $this->finalize($jobId);
+            $this->finalize($job, $tmpDir);
         }
     }
 
@@ -97,8 +98,9 @@ final class ImportStep
     // финализация / сборка зависимостей тика
     // ---------------------------------------------------------------
 
-    private function finalize(int $jobId): void
+    private function finalize(array $job, string $tmpDir): void
     {
+        $jobId = (int)$job['ID'];
         ImportJobTable::update($jobId, [
             'STATUS' => ImportJobTable::STATUS_DONE,
             'STAGE' => 'done',
@@ -107,6 +109,14 @@ final class ImportStep
         ]);
 
         $this->eventLog->done($jobId);
+
+        // История импортов нужна только для отметок в списке файлов Диска: её сбой не должен превращать уже
+        // завершённый импорт в ошибку — только запись в журнал событий.
+        try {
+            ImportedFileTable::remember($job, $tmpDir);
+        } catch (\Throwable $e) {
+            $this->eventLog->error($jobId, $e->getMessage());
+        }
     }
 
     private function buildContext(array $job, string $tmpDir): ImportContext
