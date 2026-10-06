@@ -54,6 +54,11 @@
         var elementsEl = document.getElementById('vibx-elements');
         var resultEl = document.getElementById('vibx-result');
         var downloadEl = document.getElementById('vibx-download');
+        // Кнопки возврата на странице прогресса импорта (import_progress.php): скрыты, пока задание выполняется.
+        var finishButtonsEl = document.getElementById('vibx-finish-buttons');
+        if (finishButtonsEl && (data.status === 'DONE' || data.status === 'ERROR')) {
+            finishButtonsEl.style.visibility = '';
+        }
 
         var percent = data.progress || 0;
         var percentText = percent + '%';
@@ -105,6 +110,7 @@
                         + '</form>';
                 }
                 downloadEl.innerHTML = downloadHtml;
+                downloadEl.style.visibility = '';
             }
         } else if (data.status === 'ERROR') {
             if (resultEl) {

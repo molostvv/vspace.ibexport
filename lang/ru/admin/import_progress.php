@@ -15,3 +15,4 @@ $MESS['IBIMPORT_STATUS_DONE'] = 'Завершено';
 $MESS['IBIMPORT_STATUS_ERROR'] = 'Ошибка';
 $MESS['IBIMPORT_ERR_JOB_NOT_FOUND'] = 'Задание импорта не найдено или недоступно.';
 $MESS['IBIMPORT_ERR_SESSID'] = 'Истекла сессия. Обновите страницу и повторите попытку.';
+$MESS['IBIMPORT_BTN_BACK'] = 'Импортировать ещё в «#IBLOCK#»';

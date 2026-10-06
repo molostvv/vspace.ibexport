@@ -15,3 +15,4 @@ $MESS['IBIMPORT_STATUS_DONE'] = 'Done';
 $MESS['IBIMPORT_STATUS_ERROR'] = 'Error';
 $MESS['IBIMPORT_ERR_JOB_NOT_FOUND'] = 'Import job not found or not accessible.';
 $MESS['IBIMPORT_ERR_SESSID'] = 'Session expired. Reload the page and try again.';
+$MESS['IBIMPORT_BTN_BACK'] = 'Import more into "#IBLOCK#"';

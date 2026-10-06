@@ -6,8 +6,11 @@ use Bitrix\Main\Loader;
 use Vspace\Ibexport\Admin\AdminMessages;
 use Vspace\Ibexport\ImportJobTable;
 use Vspace\Ibexport\Importer;
+use Vspace\Ibexport\Options;
+use Vspace\Ibexport\YandexDisk\Settings;
 
 Loader::includeModule('vspace.ibexport');
+Loader::includeModule('iblock');
 
 IncludeModuleLangFile(__FILE__);
 
@@ -66,6 +69,25 @@ if ($job['STATUS'] === ImportJobTable::STATUS_DONE) {
     $messageHtml = AdminMessages::error(GetMessage('IBIMPORT_PROGRESS_ERROR') . ': ' . (string)$job['ERROR_MESSAGE']);
 }
 
+// Кнопка возврата к импорту следующих файлов в тот же инфоблок, с теми же параметрами формы. Диск подключён — сразу
+// со списком его файлов (тот же GET-запрос, что делает кнопка "Проверить Диск"; форма для ручной загрузки .zip на
+// той странице остаётся сверху), иначе только форма (STEP=form — ничего не выполнять, см. ImportPageController).
+$targetIblockId = (int)$job['TARGET_IBLOCK_ID'];
+$targetIblock = \Bitrix\Iblock\IblockTable::getList(['filter' => ['=ID' => $targetIblockId], 'select' => ['NAME']])->fetch();
+$backParams = [
+    'lang' => LANGUAGE_ID,
+    'IBLOCK_ID' => $targetIblockId,
+    'PARENT_SECTION_REF' => (int)$job['PARENT_SECTION_ID'] ?: '',
+    'UPDATE_BY_CODE' => $job['UPDATE_BY_CODE'] === 'Y' ? 'Y' : '',
+    'MATCH_BY_XML_ID' => ($job['MATCH_BY_XML_ID'] ?? 'N') === 'Y' ? 'Y' : '',
+];
+$backStep = Options::isYandexDiskEnabled() && Settings::hasToken()
+    ? ['STEP' => 'disk_list', 'sessid' => bitrix_sessid()]
+    : ['STEP' => 'form'];
+$backUrl = '/bitrix/admin/vspace_ibexport_import.php?' . http_build_query($backParams + $backStep);
+$backTitle = GetMessage('IBIMPORT_BTN_BACK', ['#IBLOCK#' => '[' . $targetIblockId . ']' . ($targetIblock ? ' ' . $targetIblock['NAME'] : '')]);
+$jobFinished = in_array($job['STATUS'], [ImportJobTable::STATUS_DONE, ImportJobTable::STATUS_ERROR], true);
+
 $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js');
 ?>
 <script>
@@ -114,8 +136,16 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
         <td><?= GetMessage('IBIMPORT_PROGRESS_ELEMENTS') ?></td>
         <td id="vibx-elements"><?= (int)$job['PROCESSED_ELEMENTS'] ?> / <?= (int)$job['TOTAL_ELEMENTS'] ?></td>
     </tr>
-    <?php $tabControl->Buttons(); ?>
-    <div id="vibx-download"></div>
+    <?php
+    // Кнопки есть в панели всегда: если её содержимое пусто, ядро (core_admin_interface.js) всё равно ставит в неё
+    // булавку "закрепить панель", и та без кнопок вываливается под форму. Пока задание выполняется, кнопки скрыты
+    // (visibility — место в панели сохраняется) — небольшой импорт продвигает только опрос этой страницы, уход с неё
+    // посреди импорта его бы остановил; progress.js показывает их по завершении.
+    $tabControl->Buttons();
+    ?>
+    <div id="vibx-finish-buttons"<?= $jobFinished ? '' : ' style="visibility: hidden;"' ?>>
+        <a class="adm-btn adm-btn-save" href="<?= htmlspecialcharsbx($backUrl) ?>"><?= htmlspecialcharsbx($backTitle) ?></a>
+    </div>
     <?php $tabControl->End(); ?>
 </div>
 <div id="vibx-result"><?= $messageHtml ?></div>

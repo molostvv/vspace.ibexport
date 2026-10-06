@@ -70,12 +70,14 @@ $initialProgress = JobTable::calculateProgress($job);
 // область кнопок самой панели (см. $tabControl->Buttons() ниже), а не в
 // отдельный блок под ней.
 $messageHtml = '';
-$downloadButtonHtml = '';
+$downloadUrl = '/bitrix/admin/vspace_ibexport_download.php?lang=' . LANGUAGE_ID
+    . '&JOB_ID=' . $jobId . '&sessid=' . bitrix_sessid();
+// Кнопка скачивания есть в панели кнопок всегда, но до завершения выгрузки скрыта (visibility — место в панели
+// сохраняется): с пустой панелью ядро (core_admin_interface.js) всё равно ставит в неё булавку "закрепить панель",
+// и та без кнопок вываливается под форму. progress.js заменяет содержимое и показывает его по завершении.
+$downloadButtonHtml = '<a class="adm-btn adm-btn-save" href="' . htmlspecialcharsbx($downloadUrl) . '">' . htmlspecialcharsbx(GetMessage('IBEXPORT_BTN_DOWNLOAD')) . '</a>';
 if ($job['STATUS'] === JobTable::STATUS_DONE) {
-    $downloadUrl = '/bitrix/admin/vspace_ibexport_download.php?lang=' . LANGUAGE_ID
-        . '&JOB_ID=' . $jobId . '&sessid=' . bitrix_sessid();
     $messageHtml = AdminMessages::ok(GetMessage('IBEXPORT_PROGRESS_DONE'));
-    $downloadButtonHtml = '<a class="adm-btn adm-btn-save" href="' . htmlspecialcharsbx($downloadUrl) . '">' . htmlspecialcharsbx(GetMessage('IBEXPORT_BTN_DOWNLOAD')) . '</a>';
 
     // Выгрузка в Яндекс.Диск — отдельная, полностью ручная кнопка рядом со
     // "Скачать архив" (ТЗ "Экспорт в Яндекс.Диск", раздел 3): недоступность
@@ -162,7 +164,7 @@ $APPLICATION->AddHeadScript('/local/modules/vspace.ibexport/admin/js/progress.js
     // в отдельном блоке под панелью с пустым местом-заглушкой.
     $tabControl->Buttons();
     ?>
-    <div id="vibx-download"><?= $downloadButtonHtml ?></div>
+    <div id="vibx-download"<?= $job['STATUS'] === JobTable::STATUS_DONE ? '' : ' style="visibility: hidden;"' ?>><?= $downloadButtonHtml ?></div>
     <?php $tabControl->End(); ?>
 </div>
 <div id="vibx-result"><?= $messageHtml ?></div>
